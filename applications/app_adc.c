@@ -393,7 +393,9 @@ static THD_FUNCTION(adc_thread, arg) {
 			if (pwr >= 0.0) {
 				// if pedal assist (PAS) thread is running, use the highest current command
 				if (app_pas_is_running()) {
-					pwr = utils_max_abs(pwr, app_pas_get_current_target_rel());
+					if (!has_torque_on_throttle()){
+						pwr = utils_max_abs(pwr, app_pas_get_current_target_rel());
+					}
 				}
 				current_rel = pwr;
 			} else {

@@ -92,6 +92,7 @@ float app_balance_get_debug2(void);
 void app_pas_start(bool is_primary_output);
 void app_pas_stop(void);
 bool app_pas_is_running(void);
+bool has_torque_on_throttle(void);
 void app_pas_configure(pas_config *conf);
 float app_pas_get_current_target_rel(void);
 float app_pas_get_pedal_rpm(void);

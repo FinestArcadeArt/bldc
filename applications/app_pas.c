@@ -32,10 +32,11 @@
 
 // Settings
 #define PEDAL_INPUT_TIMEOUT				0.2
-#define MAX_MS_WITHOUT_CADENCE			5000
+#define MAX_MS_WITHOUT_CADENCE			3000
 #define MIN_MS_WITHOUT_POWER			500
 #define FILTER_SAMPLES					5
 #define RPM_FILTER_SAMPLES				8
+#define MS_WITHOUT_CADENCE_COOLING_TIME 1000
 
 // Threads
 static THD_FUNCTION(pas_thread, arg);
@@ -54,7 +55,12 @@ static volatile bool primary_output = false;
 static volatile bool stop_now = true;
 static volatile bool is_running = false;
 static volatile float torque_ratio = 0.0;
-
+static volatile float min_start_torque = 0.5; //put this later in config
+static volatile bool torque_on_throtttle = false;
+static volatile float ms_without_cadence = 0.0;
+static volatile bool first_start_init = true;
+static volatile float ms_without_cadence_cooling_time = 0.0;
+static volatile bool min_start_torque_reached = false;
 /**
  * Configure and initialize PAS application
  *
@@ -93,6 +99,10 @@ bool app_pas_is_running(void) {
 	return is_running;
 }
 
+bool has_torque_on_throttle(void){
+	return torque_on_throtttle;
+}
+
 void app_pas_stop(void) {
 	stop_now = true;
 	while (is_running) {
@@ -120,7 +130,51 @@ float app_pas_get_pedal_rpm(void) {
 }
 
 void pas_event_handler(void) {
-#ifdef HW_PAS1_PORT
+#ifdef HW_HAS_3_WIRES_PAS_SENSOR
+	if (config.sensor_type == PAS_SENSOR_TYPE_STANDARD){
+		uint8_t new_state;
+		static uint8_t pulse_count = 0;
+		static uint8_t old_state = 0;
+		static float old_timestamp = 0;
+		static float inactivity_time = 0;
+		static float period_filtered = 0;
+
+		uint8_t PAS_level = palReadPad(HW_PAS1_PORT, HW_PAS1_PIN);
+		//Maybe here Set the second port for external sensor
+		new_state = PAS_level;
+		if (new_state != old_state)
+			pulse_count++;
+
+		old_state = new_state;
+
+		const float timestamp = (float)chVTGetSystemTimeX() / (float)CH_CFG_ST_FREQUENCY;
+
+		// sensors are poorly placed, so use only one rising edge as reference
+		if(pulse_count > 1) {
+			float period = (timestamp - old_timestamp) * (float)config.magnets;
+			old_timestamp = timestamp;
+
+			UTILS_LP_FAST(period_filtered, period, 0.5);
+
+			if(period_filtered < min_pedal_period) { //can't be that short, abort
+				return;
+			}
+			pedal_rpm = 60.0 / period_filtered;
+			inactivity_time = 0.0;
+			pulse_count = 0;
+		}
+		else {
+			inactivity_time += 1.0 / (float)config.update_rate_hz;
+
+			//if no pedal activity, set RPM as zero + taking in account the current RPM speed to give a more natural stop feeling
+			if(inactivity_time > 1.0 / ((((config.pedal_rpm_start / 2) + pedal_rpm )/ 60.0) * config.magnets) * 2) {
+				pedal_rpm = 0.0;
+			}
+		}
+	}
+#endif
+
+#ifdef HW_HAS_4_WIRES_PAS_SENSOR
 	const int8_t QEM[] = {0,-1,1,2,1,0,2,-1,-1,2,0,1,2,1,-1,0}; // Quadrature Encoder Matrix
 	int8_t direction_qem;
 	uint8_t new_state;
@@ -179,8 +233,10 @@ static THD_FUNCTION(pas_thread, arg) {
 	float output = 0;
 	chRegSetThreadName("APP_PAS");
 
-#ifdef HW_PAS1_PORT
+
 	palSetPadMode(HW_PAS1_PORT, HW_PAS1_PIN, PAL_MODE_INPUT_PULLUP);
+
+#ifdef HW_HAS_4_WIRES_PAS_SENSOR
 	palSetPadMode(HW_PAS2_PORT, HW_PAS2_PIN, PAL_MODE_INPUT_PULLUP);
 #endif
 
@@ -213,9 +269,20 @@ static THD_FUNCTION(pas_thread, arg) {
 		}
 
 		switch (config.ctrl_type) {
+
 			case PAS_CTRL_TYPE_NONE:
 				output = 0.0;
 				break;
+			case PAS_CTRL_TYPE_BASIC:
+				// Standard way a PAS sensor on an E-Bike works. if PAS over min RPM. it starts and gives the max what assist level is set at, else, it stops.
+				if (pedal_rpm > (config.pedal_rpm_start + 1.0)) {
+					output = config.current_scaling * sub_scaling;
+				} 
+				else {					
+					output = 0.0;
+				}
+				break;
+
 			case PAS_CTRL_TYPE_CADENCE:
 				// Map pedal rpm to assist level
 
@@ -232,8 +299,49 @@ static THD_FUNCTION(pas_thread, arg) {
 					}
 				}
 				break;
+			case PAS_CTRL_TYPE_TORQUE: // Standard way a PAS/Torque sensor (analog) on an E-Bike works. if PAS over min RPM. it starts and gives the max what assist level is * torque ration (0->1) set at, else, it stops. It uses throttle as TS!
+				//first start init
+				if (first_start_init){
+					torque_on_throtttle = true;
+					app_adc_detach_adc(1);
+					first_start_init = false;
+				}
+				torque_ratio = app_adc_get_decoded_level();
+				if (pedal_rpm > (config.pedal_rpm_start + 1.0)) {	
+					output = config.current_scaling * torque_ratio * sub_scaling;
+					utils_truncate_number(&output, 0.0, config.current_scaling * sub_scaling);
+					ms_without_cadence = 0.0;
+					ms_without_cadence_cooling_time = 0.0;
+					min_start_torque_reached = false;
+				} 
+				//start on pedal press available (1s delay) for 3s, if no PAS signal are detected it cools down for 1 second. 
+				else {
+					if(torque_ratio > min_start_torque){
+						min_start_torque_reached = true;
+					}	
+					if(min_start_torque_reached){
+						if (ms_without_cadence_cooling_time > MS_WITHOUT_CADENCE_COOLING_TIME){				
+							ms_without_cadence += (1000.0 * (float)sleep_time) / (float)CH_CFG_ST_FREQUENCY;
+							if(ms_without_cadence < MAX_MS_WITHOUT_CADENCE) {
+								output = config.current_scaling * torque_ratio * sub_scaling;
+								utils_truncate_number(&output, 0.0, config.current_scaling * sub_scaling);
+							}
+							else {
+								output = 0.0;
+								ms_without_cadence_cooling_time = 0.0;
+								min_start_torque_reached = false;
+							}
+						} 
+						else{
+							output = 0.0;
+							ms_without_cadence_cooling_time += (1000.0 * (float)sleep_time) / (float)CH_CFG_ST_FREQUENCY;
+						}
+					}
+				}
+				break;
 
-#ifdef HW_HAS_PAS_TORQUE_SENSOR
+// this had to be modified (CAN_TORQUE_SENSOR) because it's an Bafang M600 specific hardware definition (CANbus torque sensor) it may be included but in a other way.
+#ifdef HW_HAS_CAN_TORQUE_SENSOR
 			case PAS_CTRL_TYPE_TORQUE:
 			{
 				torque_ratio = hw_get_PAS_torque();
@@ -264,7 +372,8 @@ static THD_FUNCTION(pas_thread, arg) {
 		static systime_t last_time = 0;
 		static float output_ramp = 0.0;
 		float ramp_time = fabsf(output) > fabsf(output_ramp) ? config.ramp_time_pos : config.ramp_time_neg;
-
+		//add here double ramp time when torque only is detected.
+		
 		if (ramp_time > 0.01) {
 			const float ramp_step = (float)ST2MS(chVTTimeElapsedSinceX(last_time)) / (ramp_time * 1000.0);
 			utils_step_towards(&output_ramp, output, ramp_step);

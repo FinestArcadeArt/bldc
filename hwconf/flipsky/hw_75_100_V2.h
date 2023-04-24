@@ -47,6 +47,17 @@
 //#define CURRENT_FILTER_ON()		palSetPad(GPIOD, 2)
 //#define CURRENT_FILTER_OFF()	palClearPad(GPIOD, 2)
 
+//HAS PAS SENSOR
+#define HW_HAS_3_WIRES_PAS_SENSOR
+//#define HW_HAS_4_WIRES_PAS_SENSOR
+
+//HAS EXT SPEED SENSOR
+#ifdef HW_HAS_3_WIRES_PAS_SENSOR
+#define HW_HAS_WHEEL_SPEED_SENSOR
+void hw_update_speed_sensor(void);
+float hw_get_speed(void);
+#endif
+
 /*
  * ADC Vector
  *
