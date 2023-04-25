@@ -233,8 +233,9 @@ static THD_FUNCTION(pas_thread, arg) {
 	float output = 0;
 	chRegSetThreadName("APP_PAS");
 
-
+#ifdef HW_HAS_PAS_SENSOR
 	palSetPadMode(HW_PAS1_PORT, HW_PAS1_PIN, PAL_MODE_INPUT_PULLUP);
+#endif
 
 #ifdef HW_HAS_4_WIRES_PAS_SENSOR
 	palSetPadMode(HW_PAS2_PORT, HW_PAS2_PIN, PAL_MODE_INPUT_PULLUP);

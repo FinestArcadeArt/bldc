@@ -53,6 +53,7 @@
 
 //HAS EXT SPEED SENSOR WITH 3 WIRE PAS
 #ifdef HW_HAS_3_WIRES_PAS_SENSOR
+#define HW_HAS_PAS_SENSOR
 #define HW_HAS_WHEEL_SPEED_SENSOR
 void hw_update_speed_sensor(void);
 float hw_get_speed(void);
@@ -60,6 +61,7 @@ float hw_get_speed(void);
 
 //HAS EXT SPEED SENSOR WITH 4 WIRES PAS
 #ifdef HW_HAS_4_WIRES_PAS_SENSOR
+#define HW_HAS_PAS_SENSOR
 #define HW_HAS_WHEEL_SPEED_SENSOR
 #define HW_SPEED_SENSOR_PORT			GPIOB
 #define HW_SPEED_SENSOR_PIN				6
@@ -195,8 +197,8 @@ float hw_get_speed(void);
 #define HW_ICU_GPIO				GPIOB
 #define HW_ICU_PIN				6
 #endif
-// Case 4 WIRE PAS SENSOR,ICU Not used, routed to a pin not present in 64 pin
-// package to free SERVO PORT FOR EXT SPEED
+// Case 4 WIRE PAS SENSOR,ICU Not used, routed to a dummy pin (not present in 64 pin
+// package) to free SERVO PORT FOR EXT SPEED
 #ifdef HW_HAS_4_WIRES_PAS_SENSOR
 #define HW_USE_SERVO_TIM4
 #define HW_ICU_TIMER			TIM4
