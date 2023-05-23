@@ -23,6 +23,13 @@
 #include <math.h>
 #include "mc_interface.h"
 
+// #include "app.h"
+// #include "terminal.h"
+// #include "commands.h"
+// #include "stdio.h"
+// #include "app.h"
+// #include "mempools.h"
+
 // Variables
 static volatile bool i2c_running = false;
 
