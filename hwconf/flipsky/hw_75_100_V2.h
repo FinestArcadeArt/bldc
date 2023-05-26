@@ -47,9 +47,9 @@
 //#define CURRENT_FILTER_ON()		palSetPad(GPIOD, 2)
 //#define CURRENT_FILTER_OFF()	palClearPad(GPIOD, 2)
 
-//HAS PAS SENSOR
-//#define HW_HAS_3_WIRES_PAS_SENSOR
-#define HW_HAS_4_WIRES_PAS_SENSOR
+//CHOOSE PAS SENSOR (both commented out = disable PAS)
+#define HW_HAS_3_WIRES_PAS_SENSOR
+//#define HW_HAS_4_WIRES_PAS_SENSOR
 
 //HAS EXT SPEED SENSOR WITH 3 WIRE PAS
 #ifdef HW_HAS_3_WIRES_PAS_SENSOR
@@ -63,7 +63,8 @@ float hw_get_distance_abs(void);
 //HAS EXT SPEED SENSOR WITH 4 WIRES PAS
 #ifdef HW_HAS_4_WIRES_PAS_SENSOR
 #define HW_HAS_PAS_SENSOR // comment this line out if you don't use speed sensor with 4 wires PAS.
-#define HW_HAS_WHEEL_SPEED_SENSOR // you can specify the port you like to use  here
+
+#define HW_HAS_WHEEL_SPEED_SENSOR // comment out block (67-72) if not used
 #define HW_SPEED_SENSOR_PORT			GPIOB
 #define HW_SPEED_SENSOR_PIN				6
 void hw_update_speed_sensor(void);
