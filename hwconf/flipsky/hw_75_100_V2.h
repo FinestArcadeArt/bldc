@@ -62,14 +62,15 @@ float hw_get_distance_abs(void);
 
 //HAS EXT SPEED SENSOR WITH 4 WIRES PAS
 #ifdef HW_HAS_4_WIRES_PAS_SENSOR
-#define HW_HAS_PAS_SENSOR // comment this line out if you don't use speed sensor with 4 wires PAS.
-
-#define HW_HAS_WHEEL_SPEED_SENSOR // comment out block (67-72) if not used
+#define HW_HAS_PAS_SENSOR 
+// comment this block out if you don't use speed sensor with 4 wires PAS.
+#define HW_HAS_WHEEL_SPEED_SENSOR
 #define HW_SPEED_SENSOR_PORT			GPIOB
 #define HW_SPEED_SENSOR_PIN				6
 void hw_update_speed_sensor(void);
 float hw_get_speed(void);
 float hw_get_distance_abs(void);
+// block to be commented out end
 #endif
 /*
  * ADC Vector

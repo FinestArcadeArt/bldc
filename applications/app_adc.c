@@ -393,9 +393,14 @@ static THD_FUNCTION(adc_thread, arg) {
 			if (pwr >= 0.0) {
 				// if pedal assist (PAS) thread is running, use the highest current command
 				if (app_pas_is_running()) {
-					if (!has_torque_on_throttle()){
-						pwr = utils_max_abs(pwr, app_pas_get_current_target_rel());
+					// add  max throttle speed if speed is on. need extra bool for this + config variable (here 6km/h)
+					if ( mc_interface_get_speed() > (6 / 3.6)) {
+						if (app_pas_get_current_target_rel() == 0)
+							pwr = 0.0;
+						else if ( app_pas_get_current_target_rel() > 25) // add config speed limit variable here
+							pwr = 0.0;
 					}
+					pwr = utils_max_abs(pwr, app_pas_get_current_target_rel());
 				}
 				current_rel = pwr;
 			} else {
