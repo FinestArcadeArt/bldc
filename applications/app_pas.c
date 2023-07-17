@@ -67,7 +67,7 @@ static volatile bool stop_now = true;
 static volatile bool is_running = false;
 static volatile float torque_ratio = 0.0;
 static volatile float min_start_torque = 0.5; // put this later in config
-static volatile bool torque_on_throtttle = false;
+static volatile bool torque_on_adc1 = false;
 static volatile bool adc_active = false;
 static volatile float adc_throttle;
 static volatile float ms_without_cadence = 0.0;
@@ -136,9 +136,9 @@ bool app_pas_is_running(void)
 	return is_running;
 }
 
-bool has_torque_on_throttle(void)
+bool has_torque_on_adc1(void)
 {
-	return torque_on_throtttle;
+	return torque_on_adc1;
 }
 
 void app_pas_stop(void)
@@ -171,7 +171,6 @@ float app_pas_get_current_target_rel(void)
 
 float app_pas_get_pedal_rpm(void)
 {
-	// commands_printf("pedal_rpm: %f\n", (double)pedal_rpm);
 	return pedal_rpm;
 }
 
@@ -446,7 +445,7 @@ static THD_FUNCTION(pas_thread, arg)
 			// first start init
 			if (first_start_init)
 			{
-				torque_on_throtttle = true;
+				torque_on_adc1 = true;
 				app_adc_detach_adc(1);
 				first_start_init = false;
 			}
@@ -678,18 +677,6 @@ static THD_FUNCTION(pas_thread, arg)
 		//  	commands_printf("output= %d, output_pid= %d, output_ramp= %d\n", (int)(output * 100), (int)(output_pid * 100), (int)(output_ramp * 100));
 		//  	print_trigger = 0;
 		//  }
-
-		//*************************** PRINT *************************
-		if (print_trigger < 200)
-		{
-			print_trigger++;
-		}
-		else
-		{
-			// commands_printf("output %d\n", (int)(output_pid * 100));
-			commands_printf(" output_current_rel: %d, primary_output: %d\n", (int)(output_current_rel * 100), primary_output);
-			print_trigger = 0;
-		}
 
 		if (primary_output == true)
 		{
