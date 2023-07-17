@@ -279,16 +279,6 @@ void pas_event_handler(void)
 			// safety guards
 			torque_percent = fmin(fmax(torque_percent, 0), 100);
 
-			// print guard function
-			// if (print_trigger < 4)
-			// {
-			// 	print_trigger++;
-			// }
-			// else
-			// {
-			// 	commands_printf("Torque: %d\n", (int)(torque_percent * 10));
-			// 	print_trigger = 0;
-			// }
 		}
 	}
 	new_state = PAS2_level * 2 + PAS1_level;
@@ -408,15 +398,6 @@ static THD_FUNCTION(pas_thread, arg)
 
 				output = (utils_throttle_curve((torque_percent / 100), -0.95, 0, 0)) + 0.005;
 
-				// if (print_trigger < 200)
-				// {
-				// 	print_trigger++;
-				// }
-				// else
-				// {
-				// 	commands_printf("drift_percent: %d, torque_percent: %d, output: %d\n", (int)drift_percent, (int)torque_percent, (int)(output*100));
-				// 	print_trigger = 0;
-				// }
 			}
 			else
 			{
@@ -449,16 +430,9 @@ static THD_FUNCTION(pas_thread, arg)
 				app_adc_detach_adc(1);
 				first_start_init = false;
 			}
+
 			torque_ratio = app_adc_get_decoded_level();
-			// if (print_trigger < 500)
-			// {
-			// 	print_trigger++;
-			// }
-			// else
-			// {
-			// 	// commands_printf("adc decoded: %f\n", (double)torque_ratio);
-			// 	print_trigger = 0;
-			// }
+
 			if (pedal_rpm > (config.pedal_rpm_start + 1.0))
 			{
 				output = config.current_scaling * torque_ratio * sub_scaling;
