@@ -183,6 +183,10 @@ float app_pas_get_current_target_rel(void)
 	return output_current_rel;
 }
 
+float app_pas_get_pas_max_speed(void)
+{
+	return max_speed;
+}
 float app_pas_get_pedal_rpm(void)
 {
 	return pedal_rpm;
