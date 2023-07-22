@@ -544,8 +544,18 @@
 #define APPCONF_PAS_UPDATE_RATE_HZ			500
 #endif
 #ifndef APPCONF_PAS_MAX_SPEED_MS
-#define APPCONF_PAS_MAX_SPEED_MS			50.5
+#define APPCONF_PAS_MAX_SPEED_MS			6.9
 #endif
+#ifndef APPCONF_PAS_PID_KP
+#define APPCONF_PAS_PID_KP		        	0.01
+#endif
+#ifndef APPCONF_PAS_PID_KI
+#define APPCONF_PAS_PID_KI		        	0.01
+#endif
+#ifndef APPCONF_PAS_PID_KD
+#define APPCONF_PAS_PID_KD		        	0.01
+#endif
+
 
 
 

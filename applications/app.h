@@ -96,6 +96,10 @@ bool has_torque_on_throttle(void);
 void app_pas_configure(pas_config *conf);
 float app_pas_get_current_target_rel(void);
 float app_pas_get_pedal_rpm(void);
+float app_pas_get_pedal_torque(void);
+float app_pas_get_kp(void);
+float app_pas_get_ki(void);
+float app_pas_get_kd(void);
 void app_pas_set_current_sub_scaling(float current_sub_scaling);
 
 // Custom apps

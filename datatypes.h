@@ -708,6 +708,10 @@ typedef struct {
 	float ramp_time_pos;
 	float ramp_time_neg;
 	uint32_t update_rate_hz;
+	float pas_max_speed;
+	float pas_pid_kp;
+	float pas_pid_ki;
+	float pas_pid_kd;
 } pas_config;
 
 // NRF Datatypes

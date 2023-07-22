@@ -1151,7 +1151,11 @@ void confgenerator_set_defaults_appconf(app_configuration *conf) {
 	conf->app_balance_conf.turntilt_erpm_boost_end = APPCONF_BALANCE_TURNTILT_ERPM_BOOST_END;
 	conf->app_pas_conf.ctrl_type = APPCONF_PAS_CTRL_TYPE;
 	conf->app_pas_conf.sensor_type = APPCONF_PAS_SENSOR_TYPE;
+	conf->app_pas_conf.pas_max_speed = APPCONF_PAS_MAX_SPEED_MS;
 	conf->app_pas_conf.current_scaling = APPCONF_PAS_CURRENT_SCALING;
+	conf->app_pas_conf.pas_pid_kp = APPCONF_PAS_PID_KP;
+	conf->app_pas_conf.pas_pid_ki = APPCONF_PAS_PID_KI;
+	conf->app_pas_conf.pas_pid_kd = APPCONF_PAS_PID_KD;
 	conf->app_pas_conf.pedal_rpm_start = APPCONF_PAS_PEDAL_RPM_START;
 	conf->app_pas_conf.pedal_rpm_end = APPCONF_PAS_PEDAL_RPM_END;
 	conf->app_pas_conf.invert_pedal_direction = APPCONF_PAS_INVERT_PEDAL_DIRECTION;

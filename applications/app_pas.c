@@ -40,13 +40,8 @@
 #define FILTER_SAMPLES 5
 #define RPM_FILTER_SAMPLES 8
 #define MS_WITHOUT_CADENCE_COOLING_TIME 1000
-// Define PID controller constants
-#define KP 0.02 // Proportional gain
-#define KI 0.01 // Integral gain
-#define KD 0.02 // Derivative gain
+
 // Define PID controller variables
-static float integral_error = 0.0; // Integral error
-static float prev_error = 0.0;	   // Previous error
 #define MAX_MOTOR_RPM 15000
 
 // Threads
@@ -75,26 +70,37 @@ static volatile bool first_start_init = true;
 static volatile float ms_without_cadence_cooling_time = 0.0;
 static volatile bool min_start_torque_reached = false;
 
-static float volatile max_speed = 25 / 3.6;
+// SPEED LIMIT
+static volatile float max_speed;
 static float current_speed;
 static float threshold_speed;
 static float current_rpm;
 static float current_rpm_goal_last;
-static float current_max_rpm = 7500;
-static float current_rpm_goal = 7500;
+static float current_max_rpm = MAX_MOTOR_RPM / 2;
+static float current_rpm_goal = MAX_MOTOR_RPM / 2;
 static float abs_current_last;
 static float abs_current;
 static float same_rpm_goal_found = 0;
+// TORQUE SENSOR
 static volatile uint16_t sample_time = 0;
 static volatile float drift_percent = 0;
 static volatile float torque_percent = 0;
 static volatile uint16_t uptime = 0;
 static volatile uint16_t downtime = 0;
 static volatile uint16_t print_trigger = 0;
+static volatile uint16_t pas_data_trigger = 0;
 static volatile bool torque_started = false;
 static volatile uint8_t torque_smoothing_trigger = 0; // 2ms loop = 10* 10 = 100ms
-static volatile float error = MAX_MOTOR_RPM * 0.2;	  // 20% from max rpm is the start point
-static volatile float output_pid;
+
+// PID
+static volatile float kp = 0.02;				   // Proportional gain
+static volatile float ki = 0.01;				   // Integral gain
+static volatile float kd = 0.02;				   // Derivative gain
+static volatile float prev_error = 0.0;					   // Previous error
+static volatile float error = MAX_MOTOR_RPM * 0.2; // proportional error ** 20% from max rpm is the start point
+static volatile float error_ki = 0.0;			   // Integral error
+static volatile float error_kd = 0.0;			   // Derivative error
+static volatile float output_pid = 0.0;
 static volatile uint8_t enough_sample_counter = 40;
 
 /**
@@ -116,6 +122,12 @@ void app_pas_configure(pas_config *conf)
 	min_pedal_period = 1.0 / ((config.pedal_rpm_end * 3.0 / 60.0));
 
 	(config.invert_pedal_direction) ? (direction_conf = -1.0) : (direction_conf = 1.0);
+	// get PID settings
+	kp = config.pas_pid_kp;
+	ki = config.pas_pid_ki;
+	kd = config.pas_pid_kd;
+	// get initial speed limit
+	max_speed = config.pas_max_speed;
 }
 
 /**
@@ -175,43 +187,76 @@ float app_pas_get_pedal_rpm(void)
 {
 	return pedal_rpm;
 }
+float app_pas_get_pedal_torque(void)
+{
+	return torque_percent;
+}
+
+float app_pas_get_kp(void)
+{
+	return kp * error;
+}
+
+float app_pas_get_ki(void)
+{
+	return ki * error_ki;
+}
+float app_pas_get_kd(void)
+{
+	return kd * error_kd;
+}
 
 void send_pas_data(void)
 {
-	 if (print_trigger < 50)
-	 {
-	 	print_trigger++;
-	 }
-	 else
-	 {
-	 //commands_printf("print_trigger is 200\n");
-	 //commands_printf("int_pedal_rpm= %d\n", (int)pedal_rpm);
-	 static unsigned char data_big_endian[2];
-	 data_big_endian[0] = (unsigned char)(((int)pedal_rpm >> 8) & 0xFF);
-	 data_big_endian[1] = (unsigned char)((int)pedal_rpm & 0xFF);
+	if (pas_data_trigger < 50)
+	{
+		pas_data_trigger++;
+	}
+	else
+	{
+		// commands_printf("print_trigger is 200\n");
+		// commands_printf("int_pedal_rpm= %d\n", (int)pedal_rpm);
+		static unsigned char pas_app_data[16];
+		pas_app_data[0] = (unsigned char)(((int)pedal_rpm >> 8) & 0xFF);
+		pas_app_data[1] = (unsigned char)((int)pedal_rpm & 0xFF);
+		pas_app_data[2] = (unsigned char)(((int)torque_percent >> 8) & 0xFF);
+		pas_app_data[3] = (unsigned char)((int)torque_percent & 0xFF);
+		pas_app_data[4] = (unsigned char)(((int)current_rpm_goal >> 8) & 0xFF);
+		pas_app_data[5] = (unsigned char)((int)current_rpm_goal & 0xFF);
+		pas_app_data[6] = (unsigned char)(((int)current_rpm_goal_last >> 8) & 0xFF);
+		pas_app_data[7] = (unsigned char)((int)current_rpm_goal_last & 0xFF);
+		pas_app_data[8] = (unsigned char)(((int)(error * 100) >> 8) & 0xFF);
+		pas_app_data[9] = (unsigned char)((int)(error * 100) & 0xFF);
+		pas_app_data[10] = (unsigned char)(((int)(error_ki * 100) >> 8) & 0xFF);
+		pas_app_data[11] = (unsigned char)((int)(error_ki * 100) & 0xFF);
+		pas_app_data[12] = (unsigned char)(((int)((kd * (error - prev_error)) * 100) >> 8) & 0xFF);
+		pas_app_data[13] = (unsigned char)((int)(((kd * (error - prev_error)) * 100) * 100) & 0xFF);
+		pas_app_data[14] = (unsigned char)(((int)(output_pid * 100) >> 8) & 0xFF);
+		pas_app_data[15] = (unsigned char)((int)(output_pid * 100) & 0xFF);
 
-	 commands_send_app_data(data_big_endian, sizeof(data_big_endian));
+		commands_send_app_data(pas_app_data, sizeof(pas_app_data));
 
-	 	print_trigger = 0;
-	 }
+		pas_data_trigger = 0;
+	}
 }
 
-float apply_speed_limiting(float *input_speed, float max_speed_limit)
+float apply_speed_limiting(float *input_speed, float max_set_speed)
 {
 	if (pedal_rpm > (config.pedal_rpm_start))
 	{
+			
 		// get current speed and rpm
 		current_speed = mc_interface_get_speed();
 		current_rpm = mc_interface_get_rpm();
 		abs_current = mc_interface_get_tot_current_filtered();
 
 		// set the threshold speed for limiting speed limiting interference
-		threshold_speed = max_speed_limit * 0.79;
+		threshold_speed = max_set_speed * 0.79;
 
 		// calculate the gear ratio to know when to stop
 		if (current_speed > threshold_speed && abs_current > 2 && current_rpm > 1000 && abs_current > abs_current_last && fabsf(error) > 5 && same_rpm_goal_found < enough_sample_counter)
 		{
-			current_rpm_goal = (max_speed_limit * current_rpm) / current_speed;
+			current_rpm_goal = (max_set_speed * current_rpm) / current_speed;
 			// guard unuseful rpm target
 			if (current_rpm_goal >= MAX_MOTOR_RPM)
 				current_rpm_goal = MAX_MOTOR_RPM;
@@ -242,16 +287,20 @@ float apply_speed_limiting(float *input_speed, float max_speed_limit)
 		// start PID control after knowing the max rpm
 		if (current_speed > threshold_speed)
 		{
+			kp = config.pas_pid_kp;
+			ki = config.pas_pid_ki;
+			kd = config.pas_pid_kd;
 			// Calculate the error (difference between desired speed and current speed)
 			error = ((current_max_rpm - current_rpm) * 100) / (current_max_rpm * 0.2);
 			error = fmin(fmax(error, -100.0), 100.0);
 
 			// Update the integral error and guard for overvalues
-			integral_error += ((error / config.update_rate_hz)); // 500Hz = 0.002s
-			integral_error = fmin(fmax(integral_error, -100.0), 100.0);
-
+			error_ki += ((error / config.update_rate_hz)); // 500Hz = 0.002s
+			error_ki = fmin(fmax(error_ki, -100.0), 100.0);
+			// Update the derivate error
+			error_kd = (error - prev_error) / config.update_rate_hz;
 			// Calculate the PID output
-			output_pid = KP * error + KI * integral_error + KD * (error - prev_error);
+			output_pid = kp * error + ki * error_ki + kd * error_kd;
 			output_pid = fmin(fmax(output_pid, 0.0), 1.0);
 
 			// Update the previous error
@@ -269,7 +318,7 @@ float apply_speed_limiting(float *input_speed, float max_speed_limit)
 			// else
 			// {
 			// 	// commands_printf("output %d\n", (int)(output_pid * 100));
-			// 	commands_printf(" current_speed = %d , current_max_rpm = %d , current_rpm = %d, error = %d , KP error = %d , KI error = %d , KD error = %d, output = %d, abs_current = %d\n", (int)((current_speed * 3.6)), (int)(current_max_rpm), (int)(current_rpm), (int)(error), (int)(KP * error) * 100, (int)(KI * integral_error) * 100, (int)(KD * (error - prev_error)) * 1000, (int)(output * 100), (int)(abs_current * 100));
+			// 	commands_printf(" current_speed = %d , current_max_rpm = %d , current_rpm = %d, error = %d , KP error = %d , KI error = %d , KD error = %d, output = %d, abs_current = %d\n", (int)((current_speed * 3.6)), (int)(current_max_rpm), (int)(current_rpm), (int)(error), (int)(KP * error) * 100, (int)(ki * error_ki) * 100, (int)(KD * (error - prev_error)) * 1000, (int)(output * 100), (int)(abs_current * 100));
 			// 	print_trigger = 0;
 			// }
 		}
@@ -619,6 +668,7 @@ static THD_FUNCTION(pas_thread, arg)
 		}
 
 		// APPLY SPEED LIMITING
+		max_speed = config.pas_max_speed;
 		output = apply_speed_limiting(&output, max_speed);
 
 		// APPLY RAMPING
@@ -686,7 +736,7 @@ static THD_FUNCTION(pas_thread, arg)
 		// 	print_trigger = 0;
 		// }
 
-		//SEND PAS CUSTOM DATA
+		// SEND PAS CUSTOM DATA
 		send_pas_data();
 
 		if (primary_output == true)
@@ -699,3 +749,4 @@ static THD_FUNCTION(pas_thread, arg)
 		}
 	}
 }
+
