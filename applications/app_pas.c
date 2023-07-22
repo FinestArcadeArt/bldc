@@ -101,7 +101,7 @@ static volatile float error = MAX_MOTOR_RPM * 0.2; // proportional error ** 20% 
 static volatile float error_ki = 0.0;			   // Integral error
 static volatile float error_kd = 0.0;			   // Derivative error
 static volatile float output_pid = 0.0;
-static volatile uint8_t enough_sample_counter = 40;
+static volatile uint8_t enough_sample_counter = 20;
 
 /**
  * Configure and initialize PAS application
@@ -258,7 +258,7 @@ float apply_speed_limiting(float *input_speed, float max_set_speed)
 		threshold_speed = max_set_speed * 0.79;
 
 		// calculate the gear ratio to know when to stop
-		if (current_speed > threshold_speed && abs_current > 2 && current_rpm > 1000 && abs_current > abs_current_last && fabsf(error) > 5 && same_rpm_goal_found < enough_sample_counter)
+		if (current_speed > threshold_speed && abs_current > 10 && current_rpm > 1000 && abs_current > abs_current_last && fabsf(error) > 5)
 		{
 			current_rpm_goal = (max_set_speed * current_rpm) / current_speed;
 			// guard unuseful rpm target
@@ -268,9 +268,6 @@ float apply_speed_limiting(float *input_speed, float max_set_speed)
 			if (fabsf(current_rpm_goal - current_rpm_goal_last) < 100)
 			{
 				current_rpm_goal = current_rpm_goal_last;
-				same_rpm_goal_found++;
-				if (same_rpm_goal_found > enough_sample_counter)
-					same_rpm_goal_found = enough_sample_counter; // should never happen... but we must be sure.
 			}
 			else
 			{
@@ -329,15 +326,13 @@ float apply_speed_limiting(float *input_speed, float max_set_speed)
 		else
 		{
 			current_max_rpm = MAX_MOTOR_RPM;
-			same_rpm_goal_found = 0;
 		}
 	}
 	else
 	{
 		*input_speed = 0.0;
-		current_max_rpm = MAX_MOTOR_RPM / 2;
-		if (same_rpm_goal_found != 0)
-			same_rpm_goal_found = 0;
+		current_max_rpm = MAX_MOTOR_RPM;
+			
 	}
 	return *input_speed;
 }
