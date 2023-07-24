@@ -60,6 +60,8 @@ static volatile float pedal_rpm = 0;
 static volatile bool primary_output = false;
 static volatile bool stop_now = true;
 static volatile bool is_running = false;
+
+// TORQUE SENSOR
 static volatile float torque_ratio = 0.0;
 static volatile float min_start_torque = 0.5; // put this later in config
 static volatile bool torque_on_adc1 = false;
@@ -74,13 +76,7 @@ static volatile bool min_start_torque_reached = false;
 static volatile float max_speed;
 static float current_speed;
 static float threshold_speed;
-static float current_rpm;
-static float current_rpm_goal_last;
-static float current_max_rpm = MAX_MOTOR_RPM / 2;
-static float current_rpm_goal = MAX_MOTOR_RPM / 2;
-static float abs_current_last;
-static float abs_current;
-static float same_rpm_goal_found = 0;
+
 // TORQUE SENSOR
 static volatile uint16_t sample_time = 0;
 static volatile float drift_percent = 0;
@@ -96,12 +92,12 @@ static volatile uint8_t torque_smoothing_trigger = 0; // 2ms loop = 10* 10 = 100
 static volatile float kp = 0.02;				   // Proportional gain
 static volatile float ki = 0.01;				   // Integral gain
 static volatile float kd = 0.02;				   // Derivative gain
-static volatile float prev_error = 0.0;					   // Previous error
+static volatile float prev_error = 0.0;			   // Previous error
 static volatile float error = MAX_MOTOR_RPM * 0.2; // proportional error ** 20% from max rpm is the start point
 static volatile float error_ki = 0.0;			   // Integral error
 static volatile float error_kd = 0.0;			   // Derivative error
 static volatile float output_pid = 0.0;
-static volatile uint8_t enough_sample_counter = 20;
+static volatile float current_speed_goal = 0;
 
 /**
  * Configure and initialize PAS application
@@ -210,7 +206,7 @@ float app_pas_get_kd(void)
 	return kd * error_kd;
 }
 
-void send_pas_data(void)
+void send_pas_data(void) // disabled for now maybe, use it later to send debug datas if needed.
 {
 	if (pas_data_trigger < 50)
 	{
@@ -225,10 +221,10 @@ void send_pas_data(void)
 		pas_app_data[1] = (unsigned char)((int)pedal_rpm & 0xFF);
 		pas_app_data[2] = (unsigned char)(((int)torque_percent >> 8) & 0xFF);
 		pas_app_data[3] = (unsigned char)((int)torque_percent & 0xFF);
-		pas_app_data[4] = (unsigned char)(((int)current_rpm_goal >> 8) & 0xFF);
-		pas_app_data[5] = (unsigned char)((int)current_rpm_goal & 0xFF);
-		pas_app_data[6] = (unsigned char)(((int)current_rpm_goal_last >> 8) & 0xFF);
-		pas_app_data[7] = (unsigned char)((int)current_rpm_goal_last & 0xFF);
+		pas_app_data[4] = (unsigned char)(((int)0000 >> 8) & 0xFF);
+		pas_app_data[5] = (unsigned char)((int)0000 & 0xFF);
+		pas_app_data[6] = (unsigned char)(((int)0000>> 8) & 0xFF);
+		pas_app_data[7] = (unsigned char)((int)0000 & 0xFF);
 		pas_app_data[8] = (unsigned char)(((int)(error * 100) >> 8) & 0xFF);
 		pas_app_data[9] = (unsigned char)((int)(error * 100) & 0xFF);
 		pas_app_data[10] = (unsigned char)(((int)(error_ki * 100) >> 8) & 0xFF);
@@ -244,97 +240,49 @@ void send_pas_data(void)
 	}
 }
 
-float apply_speed_limiting(float *input_speed, float max_set_speed)
+float apply_pid_speed_limiting(float *input_value, float max_set_speed)
 {
-	if (pedal_rpm > (config.pedal_rpm_start))
-	{
-			
-		// get current speed and rpm
-		current_speed = mc_interface_get_speed();
-		current_rpm = mc_interface_get_rpm();
-		abs_current = mc_interface_get_tot_current_filtered();
 
-		// set the threshold speed for limiting speed limiting interference
-		threshold_speed = max_set_speed * 0.79;
+	current_speed = mc_interface_get_speed();
+	// set the threshold speed for limiting speed limiting interference
+	threshold_speed = max_set_speed * 0.8;
 
-		// calculate the gear ratio to know when to stop
-		if (current_speed > threshold_speed && abs_current > 10 && current_rpm > 1000 && abs_current > abs_current_last && fabsf(error) > 5)
-		{
-			current_rpm_goal = (max_set_speed * current_rpm) / current_speed;
-			// guard unuseful rpm target
-			if (current_rpm_goal >= MAX_MOTOR_RPM)
-				current_rpm_goal = MAX_MOTOR_RPM;
-			// ignore small fluctuations
-			if (fabsf(current_rpm_goal - current_rpm_goal_last) < 100)
-			{
-				current_rpm_goal = current_rpm_goal_last;
-			}
-			else
-			{
-				if (current_rpm_goal > current_rpm_goal_last)
-					current_rpm_goal += (current_rpm_goal - current_rpm_goal_last) / 2;
-				else
-					current_rpm_goal -= (current_rpm_goal_last - current_rpm_goal) / 2;
+	// start PID control after knowing the max rpm
 
-				current_rpm_goal_last = current_rpm_goal;
-			}
-		}
-		// always check ramping
-		abs_current_last = abs_current;
-
-		// apply the reach at thread Hz.
-		current_max_rpm = current_max_rpm + ((current_rpm_goal - current_max_rpm) / 2);
-
-		// start PID control after knowing the max rpm
-		if (current_speed > threshold_speed)
-		{
-			kp = config.pas_pid_kp;
-			ki = config.pas_pid_ki;
-			kd = config.pas_pid_kd;
-			// Calculate the error (difference between desired speed and current speed)
-			error = ((current_max_rpm - current_rpm) * 100) / (current_max_rpm * 0.2);
-			error = fmin(fmax(error, -100.0), 100.0);
-
-			// Update the integral error and guard for overvalues
-			error_ki += ((error / config.update_rate_hz)); // 500Hz = 0.002s
-			error_ki = fmin(fmax(error_ki, -100.0), 100.0);
-			// Update the derivate error
-			error_kd = (error - prev_error) / config.update_rate_hz;
-			// Calculate the PID output
-			output_pid = kp * error + ki * error_ki + kd * error_kd;
-			output_pid = fmin(fmax(output_pid, 0.0), 1.0);
-
-			// Update the previous error
-			prev_error = error;
-
-			// Apply the scaling factor to the output
-			if (*input_speed > output_pid)
-				*input_speed *= output_pid;
-
-			//*************************** PRINT *************************
-			// if (print_trigger < 200)
-			// {
-			// 	print_trigger++;
-			// }
-			// else
-			// {
-			// 	// commands_printf("output %d\n", (int)(output_pid * 100));
-			// 	commands_printf(" current_speed = %d , current_max_rpm = %d , current_rpm = %d, error = %d , KP error = %d , KI error = %d , KD error = %d, output = %d, abs_current = %d\n", (int)((current_speed * 3.6)), (int)(current_max_rpm), (int)(current_rpm), (int)(error), (int)(KP * error) * 100, (int)(ki * error_ki) * 100, (int)(KD * (error - prev_error)) * 1000, (int)(output * 100), (int)(abs_current * 100));
-			// 	print_trigger = 0;
-			// }
-		}
-		else
-		{
-			current_max_rpm = MAX_MOTOR_RPM;
-		}
+	kp = config.pas_pid_kp;
+	ki = config.pas_pid_ki;
+	kd = config.pas_pid_kd;
+	// Calculate the error (difference between desired speed and current speed)
+	error = ((max_speed - current_speed) * 100) / (max_speed * 0.2); // this should create an error at 100% by 80% of max speed
+	error = fmin(fmax(error, -100.0), 100.0);
+	//guard from under threshold actions or too motivated ki
+	if (error >= 100){
+		error_ki = 0.0;
+		return *input_value;
+	}else if(error <= -100){
+		error_ki = 0.0;
+		*input_value *= 0.0;
+		return *input_value;
 	}
-	else
-	{
-		*input_speed = 0.0;
-		current_max_rpm = MAX_MOTOR_RPM;
-			
-	}
-	return *input_speed;
+
+	// Update the integral error and guard for overvalues
+	error_ki += ((error / config.update_rate_hz)); // 500Hz = 0.002s
+
+	// Update the derivate error
+	error_kd = (error - prev_error) / config.update_rate_hz;
+
+	// Calculate the PID output
+	output_pid = kp * error + ki * error_ki + kd * error_kd;
+	output_pid = fmin(fmax(output_pid, 0.0), 1.0);
+
+	// Update the previous error
+	prev_error = error;
+
+	// Apply the scaling factor to the output
+	if (*input_value > output_pid && pedal_rpm > (config.pedal_rpm_start))
+		*input_value *= output_pid;
+
+	return *input_value;
 }
 void pas_event_handler(void)
 {
@@ -441,6 +389,9 @@ void pas_event_handler(void)
 			// safety guards
 			torque_percent = fmin(fmax(torque_percent, 0), 100);
 		}
+	}
+	else{
+		torque_percent = 0.0;
 	}
 	new_state = PAS2_level * 2 + PAS1_level;
 	direction_qem = (float)QEM[old_state * 4 + new_state];
@@ -557,7 +508,7 @@ static THD_FUNCTION(pas_thread, arg)
 			if (pedal_rpm > (config.pedal_rpm_start) && torque_started)
 			{
 
-				output = (utils_throttle_curve((torque_percent / 100), -0.95, 0, 0)) + 0.001;
+				output = (utils_throttle_curve((torque_percent / 100), -0.95, 0, 0)) + 0.001; // use exp curving to compensate bad TS and add a minimum 0.001 too
 			}
 			else
 			{
@@ -668,7 +619,7 @@ static THD_FUNCTION(pas_thread, arg)
 
 		// APPLY SPEED LIMITING
 		max_speed = config.pas_max_speed;
-		output = apply_speed_limiting(&output, max_speed);
+		output = apply_pid_speed_limiting(&output, max_speed);
 
 		// APPLY RAMPING
 		static systime_t last_time = 0;
@@ -736,7 +687,7 @@ static THD_FUNCTION(pas_thread, arg)
 		// }
 
 		// SEND PAS CUSTOM DATA
-		send_pas_data();
+		// send_pas_data();
 
 		if (primary_output == true)
 		{
@@ -748,4 +699,3 @@ static THD_FUNCTION(pas_thread, arg)
 		}
 	}
 }
-

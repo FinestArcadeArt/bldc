@@ -4,17 +4,17 @@
 	This file is part of the VESC firmware.
 
 	The VESC firmware is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
 
-    The VESC firmware is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
+	The VESC firmware is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
 
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+	You should have received a copy of the GNU General Public License
+	along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include "app.h"
@@ -31,19 +31,19 @@
 #include <math.h>
 
 // Settings
-#define MAX_CAN_AGE						0.1
-#define MIN_MS_WITHOUT_POWER			500
-#define FILTER_SAMPLES					5
-#define RPM_FILTER_SAMPLES				8
-#define TC_DIFF_MAX_PASS				60  // TODO: move to app_conf
+#define MAX_CAN_AGE 0.1
+#define MIN_MS_WITHOUT_POWER 500
+#define FILTER_SAMPLES 5
+#define RPM_FILTER_SAMPLES 8
+#define TC_DIFF_MAX_PASS 60 // TODO: move to app_conf
 
-#define CTRL_USES_BUTTON(ctrl_type)(\
-		ctrl_type == ADC_CTRL_TYPE_CURRENT_REV_BUTTON || \
-		ctrl_type == ADC_CTRL_TYPE_CURRENT_REV_BUTTON_BRAKE_ADC || \
-		ctrl_type == ADC_CTRL_TYPE_CURRENT_REV_BUTTON_BRAKE_CENTER || \
-		ctrl_type == ADC_CTRL_TYPE_CURRENT_NOREV_BRAKE_BUTTON || \
-		ctrl_type == ADC_CTRL_TYPE_DUTY_REV_BUTTON || \
-		ctrl_type == ADC_CTRL_TYPE_PID_REV_BUTTON)
+#define CTRL_USES_BUTTON(ctrl_type) (                             \
+	ctrl_type == ADC_CTRL_TYPE_CURRENT_REV_BUTTON ||              \
+	ctrl_type == ADC_CTRL_TYPE_CURRENT_REV_BUTTON_BRAKE_ADC ||    \
+	ctrl_type == ADC_CTRL_TYPE_CURRENT_REV_BUTTON_BRAKE_CENTER || \
+	ctrl_type == ADC_CTRL_TYPE_CURRENT_NOREV_BRAKE_BUTTON ||      \
+	ctrl_type == ADC_CTRL_TYPE_DUTY_REV_BUTTON ||                 \
+	ctrl_type == ADC_CTRL_TYPE_PID_REV_BUTTON)
 
 // Threads
 static THD_FUNCTION(adc_thread, arg);
@@ -66,12 +66,17 @@ static volatile bool buttons_detached = false;
 static volatile bool rev_override = false;
 static volatile bool cc_override = false;
 
-void app_adc_configure(adc_config *conf) {
-	if (!buttons_detached && (((conf->buttons >> 0) & 1) || CTRL_USES_BUTTON(conf->ctrl_type))) {
-		if (use_rx_tx_as_buttons) {
+void app_adc_configure(adc_config *conf)
+{
+	if (!buttons_detached && (((conf->buttons >> 0) & 1) || CTRL_USES_BUTTON(conf->ctrl_type)))
+	{
+		if (use_rx_tx_as_buttons)
+		{
 			palSetPadMode(HW_UART_TX_PORT, HW_UART_TX_PIN, PAL_MODE_INPUT_PULLUP);
 			palSetPadMode(HW_UART_RX_PORT, HW_UART_RX_PIN, PAL_MODE_INPUT_PULLUP);
-		} else {
+		}
+		else
+		{
 			palSetPadMode(HW_ICU_GPIO, HW_ICU_PIN, PAL_MODE_INPUT_PULLUP);
 		}
 	}
@@ -80,7 +85,8 @@ void app_adc_configure(adc_config *conf) {
 	ms_without_power = 0.0;
 }
 
-void app_adc_start(bool use_rx_tx) {
+void app_adc_start(bool use_rx_tx)
+{
 #ifdef HW_ADC_EXT_GPIO
 	palSetPadMode(HW_ADC_EXT_GPIO, HW_ADC_EXT_PIN, PAL_MODE_INPUT_ANALOG);
 #endif
@@ -88,9 +94,12 @@ void app_adc_start(bool use_rx_tx) {
 	palSetPadMode(HW_ADC_EXT2_GPIO, HW_ADC_EXT2_PIN, PAL_MODE_INPUT_ANALOG);
 #endif
 
-	if (buttons_detached) {
+	if (buttons_detached)
+	{
 		use_rx_tx_as_buttons = false;
-	} else {
+	}
+	else
+	{
 		use_rx_tx_as_buttons = use_rx_tx;
 	}
 
@@ -98,80 +107,97 @@ void app_adc_start(bool use_rx_tx) {
 	chThdCreateStatic(adc_thread_wa, sizeof(adc_thread_wa), NORMALPRIO, adc_thread, NULL);
 }
 
-void app_adc_stop(void) {
+void app_adc_stop(void)
+{
 	stop_now = true;
-	while (is_running) {
+	while (is_running)
+	{
 		chThdSleepMilliseconds(1);
 	}
 }
 
-float app_adc_get_decoded_level(void) {
+float app_adc_get_decoded_level(void)
+{
 	return decoded_level;
 }
 
-float app_adc_get_voltage(void) {
+float app_adc_get_voltage(void)
+{
 	return read_voltage;
 }
 
-float app_adc_get_decoded_level2(void) {
+float app_adc_get_decoded_level2(void)
+{
 	return decoded_level2;
 }
 
-float app_adc_get_voltage2(void) {
+float app_adc_get_voltage2(void)
+{
 	return read_voltage2;
 }
 
-void app_adc_detach_adc(int detach) {
+void app_adc_detach_adc(int detach)
+{
 	adc_detached = detach;
 }
 
-void app_adc_adc1_override(float val) {
+void app_adc_adc1_override(float val)
+{
 	val = utils_map(val, 0.0, 1.0, 0.0, 3.3);
 	utils_truncate_number(&val, 0, 3.3);
 	adc1_override = val;
 }
 
-void app_adc_adc2_override(float val) {
+void app_adc_adc2_override(float val)
+{
 	val = utils_map(val, 0.0, 1.0, 0.0, 3.3);
 	utils_truncate_number(&val, 0, 3.3);
 	adc2_override = val;
 }
 
-void app_adc_detach_buttons(bool state) {
+void app_adc_detach_buttons(bool state)
+{
 	buttons_detached = state;
 }
 
-void app_adc_rev_override(bool state) {
+void app_adc_rev_override(bool state)
+{
 	rev_override = state;
 }
 
-void app_adc_cc_override(bool state) {
+void app_adc_cc_override(bool state)
+{
 	cc_override = state;
 }
 
-static THD_FUNCTION(adc_thread, arg) {
+static THD_FUNCTION(adc_thread, arg)
+{
 	(void)arg;
 
 	chRegSetThreadName("APP_ADC");
 	is_running = true;
 
-	for(;;) {
+	for (;;)
+	{
 		// Sleep for a time according to the specified rate
 		systime_t sleep_time = CH_CFG_ST_FREQUENCY / config.update_rate_hz;
 
 		// At least one tick should be slept to not block the other threads
-		if (sleep_time == 0) {
+		if (sleep_time == 0)
+		{
 			sleep_time = 1;
 		}
 		chThdSleep(sleep_time);
 
-		if (stop_now) {
+		if (stop_now)
+		{
 			is_running = false;
 			return;
 		}
 
 		// For safe start when fault codes occur
-		if (mc_interface_get_fault() != FAULT_CODE_NONE && config.safe_start != SAFE_START_NO_FAULT) {
+		if (mc_interface_get_fault() != FAULT_CODE_NONE && config.safe_start != SAFE_START_NO_FAULT)
+		{
 			ms_without_power = 0;
 		}
 
@@ -179,7 +205,8 @@ static THD_FUNCTION(adc_thread, arg) {
 		float pwr = ADC_VOLTS(ADC_IND_EXT);
 
 		// Override pwr value, when used from LISP
-		if (adc_detached == 1 || adc_detached == 2) {
+		if (adc_detached == 1 || adc_detached == 2)
+		{
 			pwr = adc1_override;
 		}
 
@@ -189,24 +216,29 @@ static THD_FUNCTION(adc_thread, arg) {
 		static float filter_val = 0.0;
 		UTILS_LP_MOVING_AVG_APPROX(filter_val, pwr, FILTER_SAMPLES);
 
-		if (config.use_filter) {
+		if (config.use_filter)
+		{
 			pwr = filter_val;
 		}
 
 		// Map the read voltage
-		switch (config.ctrl_type) {
+		switch (config.ctrl_type)
+		{
 		case ADC_CTRL_TYPE_CURRENT_REV_CENTER:
 		case ADC_CTRL_TYPE_CURRENT_REV_BUTTON_BRAKE_CENTER:
 		case ADC_CTRL_TYPE_CURRENT_NOREV_BRAKE_CENTER:
 		case ADC_CTRL_TYPE_DUTY_REV_CENTER:
 		case ADC_CTRL_TYPE_PID_REV_CENTER:
 			// Mapping with respect to center voltage
-			if (pwr < config.voltage_center) {
+			if (pwr < config.voltage_center)
+			{
 				pwr = utils_map(pwr, config.voltage_start,
-						config.voltage_center, 0.0, 0.5);
-			} else {
+								config.voltage_center, 0.0, 0.5);
+			}
+			else
+			{
 				pwr = utils_map(pwr, config.voltage_center,
-						config.voltage_end, 0.5, 1.0);
+								config.voltage_end, 0.5, 1.0);
 			}
 			break;
 
@@ -220,7 +252,8 @@ static THD_FUNCTION(adc_thread, arg) {
 		utils_truncate_number(&pwr, 0.0, 1.0);
 
 		// Optionally invert the read voltage
-		if (config.voltage_inverted) {
+		if (config.voltage_inverted)
+		{
 			pwr = 1.0 - pwr;
 		}
 
@@ -238,7 +271,8 @@ static THD_FUNCTION(adc_thread, arg) {
 #endif
 
 		// Override brake value, when used from LISP
-		if (adc_detached == 1 || adc_detached == 3) {
+		if (adc_detached == 1 || adc_detached == 3)
+		{
 			brake = adc2_override;
 		}
 
@@ -248,7 +282,8 @@ static THD_FUNCTION(adc_thread, arg) {
 		static float filter_val_2 = 0.0;
 		UTILS_LP_MOVING_AVG_APPROX(filter_val_2, brake, FILTER_SAMPLES);
 
-		if (config.use_filter) {
+		if (config.use_filter)
+		{
 			brake = filter_val_2;
 		}
 
@@ -257,7 +292,8 @@ static THD_FUNCTION(adc_thread, arg) {
 		utils_truncate_number(&brake, 0.0, 1.0);
 
 		// Optionally invert the read voltage
-		if (config.voltage2_inverted) {
+		if (config.voltage2_inverted)
+		{
 			brake = 1.0 - brake;
 		}
 
@@ -266,57 +302,73 @@ static THD_FUNCTION(adc_thread, arg) {
 		// Read the button pins
 		bool cc_button = false;
 		bool rev_button = false;
-		if (use_rx_tx_as_buttons) {
+		if (use_rx_tx_as_buttons)
+		{
 			cc_button = !palReadPad(HW_UART_TX_PORT, HW_UART_TX_PIN);
-			if ((config.buttons >> 1) & 1) {
+			if ((config.buttons >> 1) & 1)
+			{
 				cc_button = !cc_button;
 			}
 			rev_button = !palReadPad(HW_UART_RX_PORT, HW_UART_RX_PIN);
-			if ((config.buttons >> 2) & 1) {
+			if ((config.buttons >> 2) & 1)
+			{
 				rev_button = !rev_button;
 			}
-		} else {
+		}
+		else
+		{
 			// When only one button input is available, use it differently depending on the control mode
 			if (config.ctrl_type == ADC_CTRL_TYPE_CURRENT_REV_BUTTON ||
-                    config.ctrl_type == ADC_CTRL_TYPE_CURRENT_REV_BUTTON_BRAKE_CENTER ||
-					config.ctrl_type == ADC_CTRL_TYPE_CURRENT_NOREV_BRAKE_BUTTON ||
-					config.ctrl_type == ADC_CTRL_TYPE_DUTY_REV_BUTTON ||
-					config.ctrl_type == ADC_CTRL_TYPE_PID_REV_BUTTON) {
+				config.ctrl_type == ADC_CTRL_TYPE_CURRENT_REV_BUTTON_BRAKE_CENTER ||
+				config.ctrl_type == ADC_CTRL_TYPE_CURRENT_NOREV_BRAKE_BUTTON ||
+				config.ctrl_type == ADC_CTRL_TYPE_DUTY_REV_BUTTON ||
+				config.ctrl_type == ADC_CTRL_TYPE_PID_REV_BUTTON)
+			{
 				rev_button = !palReadPad(HW_ICU_GPIO, HW_ICU_PIN);
-				if ((config.buttons >> 2) & 1) {
+				if ((config.buttons >> 2) & 1)
+				{
 					rev_button = !rev_button;
 				}
-			} else {
+			}
+			else
+			{
 				cc_button = !palReadPad(HW_ICU_GPIO, HW_ICU_PIN);
-				if ((config.buttons >> 1) & 1) {
+				if ((config.buttons >> 1) & 1)
+				{
 					cc_button = !cc_button;
 				}
 			}
 		}
 
 		// Override button values, when used from LISP
-		if (buttons_detached) {
+		if (buttons_detached)
+		{
 			cc_button = cc_override;
 			rev_button = rev_override;
-			if ((config.buttons >> 1) & 1) {
+			if ((config.buttons >> 1) & 1)
+			{
 				cc_button = !cc_button;
 			}
-			if ((config.buttons >> 2) & 1) {
+			if ((config.buttons >> 2) & 1)
+			{
 				rev_button = !rev_button;
 			}
 		}
 
-		if (!((config.buttons >> 0) & 1)) {
+		if (!((config.buttons >> 0) & 1))
+		{
 			cc_button = false;
 		}
 
 		// All pins and buttons are still decoded for debugging, even
 		// when output is disabled.
-		if (app_is_output_disabled()) {
+		if (app_is_output_disabled())
+		{
 			continue;
 		}
 
-		switch (config.ctrl_type) {
+		switch (config.ctrl_type)
+		{
 		case ADC_CTRL_TYPE_CURRENT_REV_CENTER:
 		case ADC_CTRL_TYPE_CURRENT_REV_BUTTON_BRAKE_CENTER:
 		case ADC_CTRL_TYPE_CURRENT_NOREV_BRAKE_CENTER:
@@ -337,7 +389,8 @@ static THD_FUNCTION(adc_thread, arg) {
 		case ADC_CTRL_TYPE_DUTY_REV_BUTTON:
 		case ADC_CTRL_TYPE_PID_REV_BUTTON:
 			// Invert the voltage if the button is pressed
-			if (rev_button) {
+			if (rev_button)
+			{
 				pwr = -pwr;
 			}
 			break;
@@ -357,7 +410,8 @@ static THD_FUNCTION(adc_thread, arg) {
 		static float pwr_ramp = 0.0;
 		float ramp_time = fabsf(pwr) > fabsf(pwr_ramp) ? config.ramp_time_pos : config.ramp_time_neg;
 
-		if (ramp_time > 0.01) {
+		if (ramp_time > 0.01)
+		{
 			const float ramp_step = (float)ST2MS(chVTTimeElapsedSinceX(last_time)) / (ramp_time * 1000.0);
 			utils_step_towards(&pwr_ramp, pwr, ramp_step);
 			last_time = chVTGetSystemTimeX();
@@ -372,48 +426,61 @@ static THD_FUNCTION(adc_thread, arg) {
 		bool send_duty = false;
 
 		// Use the filtered and mapped voltage for control according to the configuration.
-		switch (config.ctrl_type) {
+		switch (config.ctrl_type)
+		{
 		case ADC_CTRL_TYPE_CURRENT:
 		case ADC_CTRL_TYPE_CURRENT_REV_CENTER:
 		case ADC_CTRL_TYPE_CURRENT_REV_BUTTON:
 			current_mode = true;
 			current_rel = pwr;
 
-			if (fabsf(pwr) < 0.001) {
+			if (fabsf(pwr) < 0.001)
+			{
 				ms_without_power += (1000.0 * (float)sleep_time) / (float)CH_CFG_ST_FREQUENCY;
 			}
 			break;
 
-        case ADC_CTRL_TYPE_CURRENT_REV_BUTTON_BRAKE_CENTER:
+		case ADC_CTRL_TYPE_CURRENT_REV_BUTTON_BRAKE_CENTER:
 		case ADC_CTRL_TYPE_CURRENT_NOREV_BRAKE_CENTER:
 		case ADC_CTRL_TYPE_CURRENT_NOREV_BRAKE_BUTTON:
 		case ADC_CTRL_TYPE_CURRENT_NOREV_BRAKE_ADC:
 		case ADC_CTRL_TYPE_CURRENT_REV_BUTTON_BRAKE_ADC:
 			current_mode = true;
-			if (pwr >= 0.0) {
+			if (pwr >= 0.0)
+			{
 				// if pedal assist (PAS) thread is running, use the highest current command
-				if (app_pas_is_running()) {
+				if (app_pas_is_running())
+				{
 					// add  max throttle speed if speed is on. need extra bool for this + config variable (here 6km/h)
-					if ( mc_interface_get_speed() > app_pas_get_pas_max_speed()) {
-						if (app_pas_get_current_target_rel() == 0)
+					if (mc_interface_get_speed() < app_pas_get_pas_max_speed())
+					{
+						if (app_pas_get_current_target_rel() <= 0)
 							pwr = 0.0;
-						else if ( app_pas_get_current_target_rel() > 25) // add config speed limit variable here
-							pwr = 0.0;
+						else
+							pwr = utils_max_abs(pwr, app_pas_get_current_target_rel());
 					}
-					pwr = utils_max_abs(pwr, app_pas_get_current_target_rel());
+					else
+					{
+						pwr = 0.0;
+					}
 				}
 				current_rel = pwr;
-			} else {
+			}
+			else
+			{
 				current_rel = fabsf(pwr);
 				current_mode_brake = true;
 			}
 
-			if (pwr < 0.001) {
+			if (pwr < 0.001)
+			{
 				ms_without_power += (1000.0 * (float)sleep_time) / (float)CH_CFG_ST_FREQUENCY;
 			}
 
 			if ((config.ctrl_type == ADC_CTRL_TYPE_CURRENT_REV_BUTTON_BRAKE_ADC ||
-			    config.ctrl_type == ADC_CTRL_TYPE_CURRENT_REV_BUTTON_BRAKE_CENTER) && rev_button) {
+				 config.ctrl_type == ADC_CTRL_TYPE_CURRENT_REV_BUTTON_BRAKE_CENTER) &&
+				rev_button)
+			{
 				current_rel = -current_rel;
 			}
 			break;
@@ -421,11 +488,13 @@ static THD_FUNCTION(adc_thread, arg) {
 		case ADC_CTRL_TYPE_DUTY:
 		case ADC_CTRL_TYPE_DUTY_REV_CENTER:
 		case ADC_CTRL_TYPE_DUTY_REV_BUTTON:
-			if (fabsf(pwr) < 0.001) {
+			if (fabsf(pwr) < 0.001)
+			{
 				ms_without_power += (1000.0 * (float)sleep_time) / (float)CH_CFG_ST_FREQUENCY;
 			}
 
-			if (!(ms_without_power < MIN_MS_WITHOUT_POWER && config.safe_start)) {
+			if (!(ms_without_power < MIN_MS_WITHOUT_POWER && config.safe_start))
+			{
 				mc_interface_set_duty(utils_map(pwr, -1.0, 1.0, -mcconf->l_max_duty, mcconf->l_max_duty));
 				send_duty = true;
 			}
@@ -434,17 +503,24 @@ static THD_FUNCTION(adc_thread, arg) {
 		case ADC_CTRL_TYPE_PID:
 		case ADC_CTRL_TYPE_PID_REV_CENTER:
 		case ADC_CTRL_TYPE_PID_REV_BUTTON:
-			if ((pwr >= 0.0 && rpm_now > 0.0) || (pwr < 0.0 && rpm_now < 0.0)) {
+			if ((pwr >= 0.0 && rpm_now > 0.0) || (pwr < 0.0 && rpm_now < 0.0))
+			{
 				current_rel = pwr;
-			} else {
+			}
+			else
+			{
 				current_rel = pwr;
 			}
 
-			if (!(ms_without_power < MIN_MS_WITHOUT_POWER && config.safe_start)) {
+			if (!(ms_without_power < MIN_MS_WITHOUT_POWER && config.safe_start))
+			{
 				float speed = 0.0;
-				if (pwr >= 0.0) {
+				if (pwr >= 0.0)
+				{
 					speed = pwr * mcconf->l_max_erpm;
-				} else {
+				}
+				else
+				{
 					speed = pwr * fabsf(mcconf->l_min_erpm);
 				}
 
@@ -452,7 +528,8 @@ static THD_FUNCTION(adc_thread, arg) {
 				send_duty = true;
 			}
 
-			if (fabsf(pwr) < 0.001) {
+			if (fabsf(pwr) < 0.001)
+			{
 				ms_without_power += (1000.0 * (float)sleep_time) / (float)CH_CFG_ST_FREQUENCY;
 			}
 			break;
@@ -464,19 +541,24 @@ static THD_FUNCTION(adc_thread, arg) {
 		bool range_ok = read_voltage >= config.voltage_min && read_voltage <= config.voltage_max;
 
 		// If safe start is enabled and the output has not been zero for long enough
-		if ((ms_without_power < MIN_MS_WITHOUT_POWER && config.safe_start) || !range_ok) {
+		if ((ms_without_power < MIN_MS_WITHOUT_POWER && config.safe_start) || !range_ok)
+		{
 			static int pulses_without_power_before = 0;
-			if (ms_without_power == pulses_without_power_before) {
+			if (ms_without_power == pulses_without_power_before)
+			{
 				ms_without_power = 0;
 			}
 			pulses_without_power_before = ms_without_power;
 			mc_interface_set_brake_current(timeout_get_brake_current());
 
-			if (config.multi_esc) {
-				for (int i = 0;i < CAN_STATUS_MSGS_TO_STORE;i++) {
+			if (config.multi_esc)
+			{
+				for (int i = 0; i < CAN_STATUS_MSGS_TO_STORE; i++)
+				{
 					can_status_msg *msg = comm_can_get_status_msg_index(i);
 
-					if (msg->id >= 0 && UTILS_AGE_S(msg->rx_time) < MAX_CAN_AGE) {
+					if (msg->id >= 0 && UTILS_AGE_S(msg->rx_time) < MAX_CAN_AGE)
+					{
 						comm_can_set_current_brake(msg->id, timeout_get_brake_current());
 					}
 				}
@@ -495,10 +577,12 @@ static THD_FUNCTION(adc_thread, arg) {
 		static float rpm_filtered = 0.0;
 		UTILS_LP_MOVING_AVG_APPROX(rpm_filtered, mc_interface_get_rpm(), RPM_FILTER_SAMPLES);
 
-		if (current_mode && cc_button && fabsf(pwr) < 0.001) {
+		if (current_mode && cc_button && fabsf(pwr) < 0.001)
+		{
 			static float pid_rpm = 0.0;
 
-			if (!was_pid) {
+			if (!was_pid)
+			{
 				was_pid = true;
 				pid_rpm = rpm_filtered;
 			}
@@ -506,13 +590,16 @@ static THD_FUNCTION(adc_thread, arg) {
 			mc_interface_set_pid_speed(pid_rpm);
 
 			// Send the same duty cycle to the other controllers
-			if (config.multi_esc) {
+			if (config.multi_esc)
+			{
 				float current = mc_interface_get_tot_current_directional_filtered();
 
-				for (int i = 0;i < CAN_STATUS_MSGS_TO_STORE;i++) {
+				for (int i = 0; i < CAN_STATUS_MSGS_TO_STORE; i++)
+				{
 					can_status_msg *msg = comm_can_get_status_msg_index(i);
 
-					if (msg->id >= 0 && UTILS_AGE_S(msg->rx_time) < MAX_CAN_AGE) {
+					if (msg->id >= 0 && UTILS_AGE_S(msg->rx_time) < MAX_CAN_AGE)
+					{
 						comm_can_set_current(msg->id, current);
 					}
 				}
@@ -526,14 +613,18 @@ static THD_FUNCTION(adc_thread, arg) {
 		// Find lowest RPM (for traction control)
 		float rpm_local = mc_interface_get_rpm();
 		float rpm_lowest = rpm_local;
-		if (config.multi_esc) {
-			for (int i = 0;i < CAN_STATUS_MSGS_TO_STORE;i++) {
+		if (config.multi_esc)
+		{
+			for (int i = 0; i < CAN_STATUS_MSGS_TO_STORE; i++)
+			{
 				can_status_msg *msg = comm_can_get_status_msg_index(i);
 
-				if (msg->id >= 0 && UTILS_AGE_S(msg->rx_time) < MAX_CAN_AGE) {
+				if (msg->id >= 0 && UTILS_AGE_S(msg->rx_time) < MAX_CAN_AGE)
+				{
 					float rpm_tmp = msg->rpm;
 
-					if (fabsf(rpm_tmp) < fabsf(rpm_lowest)) {
+					if (fabsf(rpm_tmp) < fabsf(rpm_lowest))
+					{
 						rpm_lowest = rpm_tmp;
 					}
 				}
@@ -541,36 +632,47 @@ static THD_FUNCTION(adc_thread, arg) {
 		}
 
 		// Optionally send the duty cycles to the other ESCs seen on the CAN-bus
-		if (send_duty && config.multi_esc) {
+		if (send_duty && config.multi_esc)
+		{
 			float duty = mc_interface_get_duty_cycle_now();
 
-			for (int i = 0;i < CAN_STATUS_MSGS_TO_STORE;i++) {
+			for (int i = 0; i < CAN_STATUS_MSGS_TO_STORE; i++)
+			{
 				can_status_msg *msg = comm_can_get_status_msg_index(i);
 
-				if (msg->id >= 0 && UTILS_AGE_S(msg->rx_time) < MAX_CAN_AGE) {
+				if (msg->id >= 0 && UTILS_AGE_S(msg->rx_time) < MAX_CAN_AGE)
+				{
 					comm_can_set_duty(msg->id, duty);
 				}
 			}
 		}
 
-		if (current_mode) {
-			if (current_mode_brake) {
+		if (current_mode)
+		{
+			if (current_mode_brake)
+			{
 				mc_interface_set_brake_current_rel(current_rel);
 
 				// Send brake command to all ESCs seen recently on the CAN bus
-				if (config.multi_esc) {
-					for (int i = 0;i < CAN_STATUS_MSGS_TO_STORE;i++) {
+				if (config.multi_esc)
+				{
+					for (int i = 0; i < CAN_STATUS_MSGS_TO_STORE; i++)
+					{
 						can_status_msg *msg = comm_can_get_status_msg_index(i);
 
-						if (msg->id >= 0 && UTILS_AGE_S(msg->rx_time) < MAX_CAN_AGE) {
+						if (msg->id >= 0 && UTILS_AGE_S(msg->rx_time) < MAX_CAN_AGE)
+						{
 							comm_can_set_current_brake_rel(msg->id, current_rel);
 						}
 					}
 				}
-			} else {
+			}
+			else
+			{
 				float current_out = current_rel;
 				bool is_reverse = false;
-				if (current_out < 0.0) {
+				if (current_out < 0.0)
+				{
 					is_reverse = true;
 					current_out = -current_out;
 					current_rel = -current_rel;
@@ -579,42 +681,58 @@ static THD_FUNCTION(adc_thread, arg) {
 				}
 
 				// Traction control
-				if (config.multi_esc) {
-					for (int i = 0;i < CAN_STATUS_MSGS_TO_STORE;i++) {
+				if (config.multi_esc)
+				{
+					for (int i = 0; i < CAN_STATUS_MSGS_TO_STORE; i++)
+					{
 						can_status_msg *msg = comm_can_get_status_msg_index(i);
 
-						if (msg->id >= 0 && UTILS_AGE_S(msg->rx_time) < MAX_CAN_AGE) {
-							if (config.tc && config.tc_max_diff > 1.0) {
+						if (msg->id >= 0 && UTILS_AGE_S(msg->rx_time) < MAX_CAN_AGE)
+						{
+							if (config.tc && config.tc_max_diff > 1.0)
+							{
 								float rpm_tmp = msg->rpm;
-								if (is_reverse) {
+								if (is_reverse)
+								{
 									rpm_tmp = -rpm_tmp;
 								}
 
 								float diff = rpm_tmp - rpm_lowest;
-                                if (diff < TC_DIFF_MAX_PASS) diff = 0;
-                                if (diff > config.tc_max_diff) diff = config.tc_max_diff;
+								if (diff < TC_DIFF_MAX_PASS)
+									diff = 0;
+								if (diff > config.tc_max_diff)
+									diff = config.tc_max_diff;
 								current_out = utils_map(diff, 0.0, config.tc_max_diff, current_rel, 0.0);
 							}
 
-							if (is_reverse) {
+							if (is_reverse)
+							{
 								comm_can_set_current_rel(msg->id, -current_out);
-							} else {
+							}
+							else
+							{
 								comm_can_set_current_rel(msg->id, current_out);
 							}
 						}
 					}
 
-					if (config.tc) {
+					if (config.tc)
+					{
 						float diff = rpm_local - rpm_lowest;
-                        if (diff < TC_DIFF_MAX_PASS) diff = 0;
-                        if (diff > config.tc_max_diff) diff = config.tc_max_diff;
+						if (diff < TC_DIFF_MAX_PASS)
+							diff = 0;
+						if (diff > config.tc_max_diff)
+							diff = config.tc_max_diff;
 						current_out = utils_map(diff, 0.0, config.tc_max_diff, current_rel, 0.0);
 					}
 				}
 
-				if (is_reverse) {
+				if (is_reverse)
+				{
 					mc_interface_set_current_rel(-current_out);
-				} else {
+				}
+				else
+				{
 					mc_interface_set_current_rel(current_out);
 				}
 			}
