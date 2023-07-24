@@ -207,7 +207,8 @@ static THD_FUNCTION(adc_thread, arg)
 		// Override pwr value, when used from LISP
 		if (adc_detached == 1 || adc_detached == 2)
 		{
-			pwr = adc1_override;
+			if (!app_pas_is_running())
+				pwr = adc1_override;
 		}
 
 		read_voltage = pwr;
@@ -451,25 +452,21 @@ static THD_FUNCTION(adc_thread, arg)
 				// if pedal assist (PAS) thread is running, use the highest current command
 				if (app_pas_is_running())
 				{
-					// add  max throttle speed if speed is on. need extra bool for this + config variable (here 6km/h)
-					if (mc_interface_get_speed() < app_pas_get_pas_max_speed())
-					{
-						if (app_pas_get_current_target_rel() <= 0)
-							pwr = 0.0;
-						else
-							pwr = utils_max_abs(pwr, app_pas_get_current_target_rel());
-					}
-					else
-					{
-						pwr = 0.0;
-					}
+					decoded_level = pwr;
+					current_rel = app_pas_get_current_target_rel();
 				}
-				current_rel = pwr;
+				else
+					current_rel = pwr;
 			}
 			else
 			{
-				current_rel = fabsf(pwr);
-				current_mode_brake = true;
+				if (app_pas_is_running())
+					decoded_level2 = pwr;
+				else
+				{
+					current_rel = fabsf(pwr);
+					current_mode_brake = true;
+				}
 			}
 
 			if (pwr < 0.001)

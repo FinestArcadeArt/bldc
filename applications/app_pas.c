@@ -57,6 +57,8 @@ static volatile float max_pulse_period = 0.0;
 static volatile float min_pedal_period = 0.0;
 static volatile float direction_conf = 0.0;
 static volatile float pedal_rpm = 0;
+static volatile float throttle_input = 0.0;
+static volatile float brake_input = 0.0;
 static volatile bool primary_output = false;
 static volatile bool stop_now = true;
 static volatile bool is_running = false;
@@ -118,10 +120,12 @@ void app_pas_configure(pas_config *conf)
 	min_pedal_period = 1.0 / ((config.pedal_rpm_end * 3.0 / 60.0));
 
 	(config.invert_pedal_direction) ? (direction_conf = -1.0) : (direction_conf = 1.0);
+
 	// get PID settings
 	kp = config.pas_pid_kp;
 	ki = config.pas_pid_ki;
 	kd = config.pas_pid_kd;
+
 	// get initial speed limit
 	max_speed = config.pas_max_speed;
 }
@@ -176,6 +180,7 @@ void app_pas_set_current_sub_scaling(float current_sub_scaling)
 
 float app_pas_get_current_target_rel(void)
 {
+
 	return output_current_rel;
 }
 
@@ -223,7 +228,7 @@ void send_pas_data(void) // disabled for now maybe, use it later to send debug d
 		pas_app_data[3] = (unsigned char)((int)torque_percent & 0xFF);
 		pas_app_data[4] = (unsigned char)(((int)0000 >> 8) & 0xFF);
 		pas_app_data[5] = (unsigned char)((int)0000 & 0xFF);
-		pas_app_data[6] = (unsigned char)(((int)0000>> 8) & 0xFF);
+		pas_app_data[6] = (unsigned char)(((int)0000 >> 8) & 0xFF);
 		pas_app_data[7] = (unsigned char)((int)0000 & 0xFF);
 		pas_app_data[8] = (unsigned char)(((int)(error * 100) >> 8) & 0xFF);
 		pas_app_data[9] = (unsigned char)((int)(error * 100) & 0xFF);
@@ -255,11 +260,14 @@ float apply_pid_speed_limiting(float *input_value, float max_set_speed)
 	// Calculate the error (difference between desired speed and current speed)
 	error = ((max_speed - current_speed) * 100) / (max_speed * 0.2); // this should create an error at 100% by 80% of max speed
 	error = fmin(fmax(error, -100.0), 100.0);
-	//guard from under threshold actions or too motivated ki
-	if (error >= 100){
+	// guard from under threshold actions or too motivated ki
+	if (error >= 100)
+	{
 		error_ki = 0.0;
 		return *input_value;
-	}else if(error <= -100){
+	}
+	else if (error <= -100)
+	{
 		error_ki = 0.0;
 		*input_value *= 0.0;
 		return *input_value;
@@ -279,11 +287,64 @@ float apply_pid_speed_limiting(float *input_value, float max_set_speed)
 	prev_error = error;
 
 	// Apply the scaling factor to the output
-	if (*input_value > output_pid && pedal_rpm > (config.pedal_rpm_start))
+	if (*input_value > output_pid)
 		*input_value *= output_pid;
 
 	return *input_value;
 }
+
+float apply_ramping(float *input_value)
+{
+
+	static systime_t last_time = 0;
+	static float output_ramp = 0.0;
+	float ramp_time_pos = config.ramp_time_pos; // Config ramp time for positive ramping
+	float ramp_time_neg = config.ramp_time_neg; // Config ramp time for negative ramping
+
+	// Apply smooth ramping at start.
+	// if (pedal_rpm > 0.01 && pedal_rpm < 100)
+	// {
+	// 	// Adjust the ramp times to be inversely proportional to the pedal RPM
+	// 	ramp_time_pos /= (pedal_rpm / 100);
+	// 	ramp_time_neg /= (pedal_rpm / 100);
+	// }
+
+	float ramp_time = fabsf(*input_value) > fabsf(output_ramp) ? ramp_time_pos : ramp_time_neg;
+
+	// slow things up when speed limiting and over speed limit threshold
+	if (pedal_rpm > (config.pedal_rpm_start) && current_speed > threshold_speed)
+		ramp_time *= 4;
+	// add here double ramp time when torque only is detected.
+	if (ramp_time > 0.01)
+	{
+		const float ramp_step = (float)ST2MS(chVTTimeElapsedSinceX(last_time)) / (ramp_time * 1000.0);
+
+		utils_step_towards(&output_ramp, *input_value, ramp_step);
+
+		// APPLY MAX POWER LIMITING
+		*input_value = utils_map(output_ramp, 0, 1.0, 0.0, config.current_scaling);
+		last_time = chVTGetSystemTimeX();
+	}
+	return *input_value;
+}
+
+float get_throttle_input(float *input_value)
+{
+	throttle_input = app_adc_get_decoded_level();
+	brake_input = app_adc_get_decoded_level2();
+	*input_value += throttle_input;
+	// guard for values over 1
+	*input_value = fmin(fmax(*input_value, 0.0), 1.0);
+	static uint16_t delay_to_print = 0;
+	if (delay_to_print++ > 250)
+	{
+		delay_to_print = 0;
+		commands_printf("throttle_input:%.2f\n", (double)throttle_input);
+		commands_printf("brake_input:%.2f\n", (double)brake_input);
+	}
+	return *input_value;
+}
+
 void pas_event_handler(void)
 {
 #ifdef HW_HAS_3_WIRES_PAS_SENSOR
@@ -362,9 +423,9 @@ void pas_event_handler(void)
 			downtime++;
 		}
 		sample_time = uptime + downtime;
-		if (sample_time > 100)
+		if (sample_time > (config.magnets * 2))
 		{
-			drift_percent = ((((uptime * 100) / sample_time) - 36) * -1) * 5; // 5 is a calibration factor to get percentage
+			drift_percent = ((((uptime * 100) / sample_time) - 36) * -1) * 5; // 5 is a calibration factor to get percentage and 36 is the offset
 			uptime = 0;
 			downtime = 0;
 		}
@@ -390,7 +451,8 @@ void pas_event_handler(void)
 			torque_percent = fmin(fmax(torque_percent, 0), 100);
 		}
 	}
-	else{
+	else
+	{
 		torque_percent = 0.0;
 	}
 	new_state = PAS2_level * 2 + PAS1_level;
@@ -500,6 +562,12 @@ static THD_FUNCTION(pas_thread, arg)
 			output = 0.0;
 			break;
 		case PAS_CTRL_TYPE_BASIC: // PAS_CTRL_TYPE_HALL_TORQUE
+			// throttle triggering
+			if (first_start_init)
+			{
+				app_adc_detach_adc(1);
+				first_start_init = false;
+			}
 
 			if (torque_percent > 20 && !torque_started) // 20 is a good value
 			{
@@ -617,41 +685,15 @@ static THD_FUNCTION(pas_thread, arg)
 			break;
 		}
 
+		// GET THROTTLE INPUT
+		output = get_throttle_input(&output);
+
 		// APPLY SPEED LIMITING
 		max_speed = config.pas_max_speed;
 		output = apply_pid_speed_limiting(&output, max_speed);
 
 		// APPLY RAMPING
-		static systime_t last_time = 0;
-		static float output_ramp = 0.0;
-		float ramp_time_pos = config.ramp_time_pos; // Config ramp time for positive ramping
-		float ramp_time_neg = config.ramp_time_neg; // Config ramp time for negative ramping
-
-		// Apply smooth ramping at start.
-		if (pedal_rpm > 0.01 && pedal_rpm < 100)
-		{
-			// Adjust the ramp times to be inversely proportional to the pedal RPM
-			ramp_time_pos /= (pedal_rpm / 100);
-			ramp_time_neg /= (pedal_rpm / 100);
-		}
-
-		float ramp_time = fabsf(output) > fabsf(output_ramp) ? ramp_time_pos : ramp_time_neg;
-
-		// slow things up when speed limiting and over speed limit threshold
-		if (pedal_rpm > (config.pedal_rpm_start) && current_speed > threshold_speed)
-			ramp_time *= 4;
-		// add here double ramp time when torque only is detected.
-		if (ramp_time > 0.01)
-		{
-			const float ramp_step = (float)ST2MS(chVTTimeElapsedSinceX(last_time)) / (ramp_time * 1000.0);
-
-			utils_step_towards(&output_ramp, output, ramp_step);
-
-			// APPLY MAX POWER LIMITING
-			output = utils_map(output_ramp, 0, 1.0, 0.0, config.current_scaling);
-
-			last_time = chVTGetSystemTimeX();
-		}
+		output = apply_ramping(&output);
 
 		if (output < 0.001)
 		{
@@ -675,16 +717,6 @@ static THD_FUNCTION(pas_thread, arg)
 		timeout_reset();
 
 		// print guard function
-		// if (print_trigger < 200)
-		// {
-		// 	print_trigger++;
-		// }
-		// else
-		// {
-		// 	// commands_printf("output %d\n", (int)(output_pid * 100));
-		// 	commands_printf("output= %d, output_pid= %d, output_ramp= %d\n", (int)(output * 100), (int)(output_pid * 100), (int)(output_ramp * 100));
-		// 	print_trigger = 0;
-		// }
 
 		// SEND PAS CUSTOM DATA
 		// send_pas_data();
