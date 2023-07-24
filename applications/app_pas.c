@@ -40,7 +40,7 @@
 #define FILTER_SAMPLES 5
 #define RPM_FILTER_SAMPLES 8
 #define MS_WITHOUT_CADENCE_COOLING_TIME 1000
-
+#define BRAKES_TIMEOUT 100
 // Define PID controller variables
 #define MAX_MOTOR_RPM 15000
 
@@ -293,26 +293,24 @@ float apply_pid_speed_limiting(float *input_value, float max_set_speed)
 	return *input_value;
 }
 
-float apply_ramping(float *input_value)
+float apply_ramping(float *input_value, float ramp_time_pos, float ramp_time_neg, uint16_t brakes_on)
 {
 
 	static systime_t last_time = 0;
 	static float output_ramp = 0.0;
-	float ramp_time_pos = config.ramp_time_pos; // Config ramp time for positive ramping
-	float ramp_time_neg = config.ramp_time_neg; // Config ramp time for negative ramping
 
 	// Apply smooth ramping at start.
-	// if (pedal_rpm > 0.01 && pedal_rpm < 100)
-	// {
-	// 	// Adjust the ramp times to be inversely proportional to the pedal RPM
-	// 	ramp_time_pos /= (pedal_rpm / 100);
-	// 	ramp_time_neg /= (pedal_rpm / 100);
-	// }
+	if (pedal_rpm > 0.01 && pedal_rpm < 40)
+	{
+		// Adjust the ramp times to be inversely proportional to the pedal RPM
+		ramp_time_pos /= (pedal_rpm / 100);
+		ramp_time_neg /= (pedal_rpm / 100);
+	}
 
 	float ramp_time = fabsf(*input_value) > fabsf(output_ramp) ? ramp_time_pos : ramp_time_neg;
 
 	// slow things up when speed limiting and over speed limit threshold
-	if (pedal_rpm > (config.pedal_rpm_start) && current_speed > threshold_speed)
+	if (pedal_rpm > (config.pedal_rpm_start) && current_speed > threshold_speed && brakes_on == 0)
 		ramp_time *= 4;
 	// add here double ramp time when torque only is detected.
 	if (ramp_time > 0.01)
@@ -331,20 +329,18 @@ float apply_ramping(float *input_value)
 float get_throttle_input(float *input_value)
 {
 	throttle_input = app_adc_get_decoded_level();
-	brake_input = app_adc_get_decoded_level2();
 	*input_value += throttle_input;
 	// guard for values over 1
 	*input_value = fmin(fmax(*input_value, 0.0), 1.0);
-	static uint16_t delay_to_print = 0;
-	if (delay_to_print++ > 250)
-	{
-		delay_to_print = 0;
-		commands_printf("throttle_input:%.2f\n", (double)throttle_input);
-		commands_printf("brake_input:%.2f\n", (double)brake_input);
-	}
 	return *input_value;
 }
 
+float get_brakes_input(float *input_value)
+{
+	brake_input = ADC_VOLTS(ADC_IND_EXT3);
+	*input_value = brake_input;
+	return *input_value;
+}
 void pas_event_handler(void)
 {
 #ifdef HW_HAS_3_WIRES_PAS_SENSOR
@@ -512,6 +508,7 @@ static THD_FUNCTION(pas_thread, arg)
 	(void)arg;
 
 	float output = 0;
+	float brakes = 0;
 	chRegSetThreadName("APP_PAS");
 
 #ifdef HW_HAS_PAS_SENSOR
@@ -692,8 +689,36 @@ static THD_FUNCTION(pas_thread, arg)
 		max_speed = config.pas_max_speed;
 		output = apply_pid_speed_limiting(&output, max_speed);
 
+		// BRAKES
+		brakes = get_brakes_input(&brakes);
+		// static uint16_t delay_to_print = 0;
+		// if (delay_to_print++ > 100)
+		// {
+		// 	delay_to_print = 0;
+		// 	commands_printf("brakes:%.2f\n", (double)brakes);
+		// }
+		float ramp_time_pos = config.ramp_time_pos; // Config ramp time for positive ramping
+		float ramp_time_neg = config.ramp_time_neg; // Config ramp time for negative ramping
+
+		static uint16_t brakes_on = 0;
+		static float brakes_delay ;
+		if (brakes < 2.5)
+		{
+			output = 0.0;
+			brakes_on++;
+			ramp_time_pos = config.ramp_time_pos; // Config ramp time for brake positive ramping
+			ramp_time_neg = config.ramp_time_neg; // Config ramp time for brake negative ramping
+		}else{
+			if (brakes_on > 0){
+				
+				brakes_delay += (1* (float)sleep_time) / (float)CH_CFG_ST_FREQUENCY;
+				if (brakes_delay > BRAKES_TIMEOUT)
+					brakes_on = 0;
+			}
+		}
+		// temporary delay hard coded
 		// APPLY RAMPING
-		output = apply_ramping(&output);
+		output = apply_ramping(&output, ramp_time_pos, ramp_time_neg, brakes_on);
 
 		if (output < 0.001)
 		{

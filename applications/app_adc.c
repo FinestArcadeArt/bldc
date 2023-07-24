@@ -449,7 +449,7 @@ static THD_FUNCTION(adc_thread, arg)
 			current_mode = true;
 			if (pwr >= 0.0)
 			{
-				// if pedal assist (PAS) thread is running, use the highest current command
+				// if pedal assist (PAS) thread is running, everything go through the app_pas
 				if (app_pas_is_running())
 				{
 					decoded_level = pwr;
