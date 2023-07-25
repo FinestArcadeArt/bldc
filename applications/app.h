@@ -87,6 +87,8 @@ float app_pas_get_ki(void);
 float app_pas_get_kd(void);
 void app_pas_set_current_sub_scaling(float current_sub_scaling);
 float app_pas_get_pas_max_speed(void);
+float app_pas_get_adc_used(void);
+float app_pas_get_regen_status(void);
 
 // Custom apps
 void app_custom_start(void);

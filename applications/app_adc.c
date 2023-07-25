@@ -213,7 +213,7 @@ static THD_FUNCTION(adc_thread, arg)
 		// Override pwr value, when used from LISP
 		if (adc_detached == 1 || adc_detached == 2)
 		{
-			if (!app_pas_is_running())
+			if (!app_pas_is_running() && app_pas_get_adc_used())
 				pwr = adc1_override;
 		}
 
@@ -374,11 +374,13 @@ static THD_FUNCTION(adc_thread, arg)
 			continue;
 		}
 
-		if (adc_detached && timeout_has_timeout()) {
+		if (adc_detached && timeout_has_timeout())
+		{
 			continue;
 		}
 
-		switch (config.ctrl_type) {
+		switch (config.ctrl_type)
+		{
 		case ADC_CTRL_TYPE_CURRENT_REV_CENTER:
 		case ADC_CTRL_TYPE_CURRENT_REV_BUTTON_BRAKE_CENTER:
 		case ADC_CTRL_TYPE_CURRENT_NOREV_BRAKE_CENTER:
@@ -459,7 +461,7 @@ static THD_FUNCTION(adc_thread, arg)
 			if (pwr >= 0.0)
 			{
 				// if pedal assist (PAS) thread is running, everything go through the app_pas
-				if (app_pas_is_running())
+				if (app_pas_is_running() && app_pas_get_adc_used())
 				{
 					decoded_level = pwr;
 					current_rel = app_pas_get_current_target_rel();
@@ -469,8 +471,15 @@ static THD_FUNCTION(adc_thread, arg)
 			}
 			else
 			{
-				if (app_pas_is_running())
+				if (app_pas_is_running() && app_pas_get_adc_used())
+				{
 					decoded_level2 = pwr;
+					if (app_pas_get_regen_status())
+					{
+						current_rel = fabsf(pwr);
+						current_mode_brake = true;
+					}
+				}
 				else
 				{
 					current_rel = fabsf(pwr);
@@ -574,7 +583,8 @@ static THD_FUNCTION(adc_thread, arg)
 		}
 
 		// Reset timeout only when the ADC-app is not detached
-		if (!adc_detached) {
+		if (!adc_detached)
+		{
 			timeout_reset();
 		}
 

@@ -40,7 +40,6 @@
 #define FILTER_SAMPLES 5
 #define RPM_FILTER_SAMPLES 8
 #define MS_WITHOUT_CADENCE_COOLING_TIME 1000
-#define BRAKES_TIMEOUT 100
 // Define PID controller variables
 #define MAX_MOTOR_RPM 15000
 
@@ -63,6 +62,9 @@ static volatile bool primary_output = false;
 static volatile bool stop_now = true;
 static volatile bool is_running = false;
 
+// THROTTLE/BRAKE INTEGRATION
+static volatile bool pas_use_adc = true;
+static volatile bool pas_has_regen = false;
 // TORQUE SENSOR
 static volatile float torque_ratio = 0.0;
 static volatile float min_start_torque = 0.5; // put this later in config
@@ -101,6 +103,10 @@ static volatile float error_kd = 0.0;			   // Derivative error
 static volatile float output_pid = 0.0;
 static volatile float current_speed_goal = 0;
 
+// DEBUG
+static volatile float debug_1;
+static volatile uint16_t debug_2;
+
 /**
  * Configure and initialize PAS application
  *
@@ -128,6 +134,12 @@ void app_pas_configure(pas_config *conf)
 
 	// get initial speed limit
 	max_speed = config.pas_max_speed;
+
+	// Initialize adc rerouting
+	pas_use_adc = config.pas_use_adc;
+
+	// check if regen is needed
+	pas_has_regen = config.pas_has_regen;
 }
 
 /**
@@ -188,10 +200,12 @@ float app_pas_get_pas_max_speed(void)
 {
 	return max_speed;
 }
+
 float app_pas_get_pedal_rpm(void)
 {
 	return pedal_rpm;
 }
+
 float app_pas_get_pedal_torque(void)
 {
 	return torque_percent;
@@ -199,16 +213,29 @@ float app_pas_get_pedal_torque(void)
 
 float app_pas_get_kp(void)
 {
-	return kp * error;
+	// return kp * error;
+	return debug_1;
 }
 
 float app_pas_get_ki(void)
 {
-	return ki * error_ki;
+	// return ki * error_ki;
+	return debug_2;
 }
+
 float app_pas_get_kd(void)
 {
 	return kd * error_kd;
+}
+
+float app_pas_get_adc_used(void)
+{
+	return pas_use_adc;
+}
+
+float app_pas_get_regen_status(void)
+{
+	return pas_has_regen;
 }
 
 void send_pas_data(void) // disabled for now maybe, use it later to send debug datas if needed.
@@ -558,9 +585,28 @@ static THD_FUNCTION(pas_thread, arg)
 		case PAS_CTRL_TYPE_NONE:
 			output = 0.0;
 			break;
-		case PAS_CTRL_TYPE_BASIC: // PAS_CTRL_TYPE_HALL_TORQUE
-			// throttle triggering
-			if (first_start_init)
+		case PAS_CTRL_TYPE_BASIC:
+			// BASIC PAS INTEGRATION (standard)
+			if (first_start_init && pas_use_adc)
+			{
+				app_adc_detach_adc(1);
+				first_start_init = false;
+			}
+
+			if (pedal_rpm > (config.pedal_rpm_start))
+			{
+				output = 1.0;
+			}
+			else
+			{
+				output = 0.0;
+			}
+
+			break;
+
+		case PAS_CTRL_TYPE_HALL_TORQUE:
+			// PAS_CTRL_TYPE_HALL_TORQUE
+			if (first_start_init && pas_use_adc)
 			{
 				app_adc_detach_adc(1);
 				first_start_init = false;
@@ -587,22 +633,38 @@ static THD_FUNCTION(pas_thread, arg)
 			// Map pedal rpm to assist level
 			// NOTE: If the limits are the same a numerical instability is approached, so in that case
 			// just use on/off control (which is what setting the limits to the same value essentially means).
-			if (pedal_rpm > (config.pedal_rpm_start))
+			if (first_start_init && pas_use_adc)
 			{
+				app_adc_detach_adc(1);
+				first_start_init = false;
+			}
 
-				output = 1.0;
+			if (config.pedal_rpm_end > (config.pedal_rpm_start + 1.0))
+			{
+				output = utils_map(pedal_rpm, config.pedal_rpm_start, config.pedal_rpm_end, 0.0, config.current_scaling * sub_scaling);
+				utils_truncate_number(&output, 0.0, config.current_scaling * sub_scaling);
 			}
 			else
 			{
-				output = 0.0;
+				if (pedal_rpm > config.pedal_rpm_end)
+				{
+					output = config.current_scaling * sub_scaling;
+				}
+				else
+				{
+					output = 0.0;
+				}
 			}
+			break;
 
 			break;
-		case PAS_CTRL_TYPE_TORQUE: // Standard way a PAS/Torque sensor (analog) on an E-Bike works. if PAS over min RPM. it starts and gives the max what assist level is * torque ration (0->1) set at, else, it stops. It uses throttle as TS!
-			// first start init
-			if (first_start_init)
+		case PAS_CTRL_TYPE_TORQUE:
+			// Standard way a PAS/Torque sensor (analog) on an E-Bike works.
+			// if PAS over min RPM. it starts and gives the max what assist level is * torque ratio (0->1) set at, else, it stops.
+			// It uses throttle as Torque sensor Input!
+
+			if (first_start_init && pas_use_adc)
 			{
-				torque_on_adc1 = true;
 				app_adc_detach_adc(1);
 				first_start_init = false;
 			}
@@ -650,8 +712,8 @@ static THD_FUNCTION(pas_thread, arg)
 			}
 			break;
 
-// this had to be modified (CAN_TORQUE_SENSOR) because it's an Bafang M600 specific hardware definition (CANbus torque sensor) it may be included but in a other way.
 #ifdef HW_HAS_CAN_TORQUE_SENSOR
+		// this had to be modified (CAN_TORQUE_SENSOR) because it's an Bafang M600 specific hardware definition (CANbus torque sensor) it may be included but in a other way.
 		case PAS_CTRL_TYPE_CAN_TORQUE:
 		{
 			torque_ratio = hw_get_PAS_torque();
@@ -692,31 +754,79 @@ static THD_FUNCTION(pas_thread, arg)
 		// BRAKES
 		brakes = get_brakes_input(&brakes);
 		// static uint16_t delay_to_print = 0;
-		// if (delay_to_print++ > 100)
-		// {
-		// 	delay_to_print = 0;
-		// 	commands_printf("brakes:%.2f\n", (double)brakes);
-		// }
+		//  if (delay_to_print++ > 100)
+		//  {
+		//  	delay_to_print = 0;
+		//  	commands_printf("brakes: %.2f, max_speed: %.2f,pas_has_regen: %d, pas_use_adc: %d, output: %.2f,  \n", (double)brakes, (double)max_speed, (int)pas_has_regen, (int)pas_use_adc, (double)output);
+		//  }
 		float ramp_time_pos = config.ramp_time_pos; // Config ramp time for positive ramping
 		float ramp_time_neg = config.ramp_time_neg; // Config ramp time for negative ramping
 
 		static uint16_t brakes_on = 0;
-		static float brakes_delay ;
-		if (brakes < 2.5)
+		static float brakes_delay_ticks = 0;
+		if (config.pas_brake_voltage_inverted && !pas_has_regen)
 		{
-			output = 0.0;
-			brakes_on++;
-			ramp_time_pos = config.ramp_time_pos; // Config ramp time for brake positive ramping
-			ramp_time_neg = config.ramp_time_neg; // Config ramp time for brake negative ramping
-		}else{
-			if (brakes_on > 0){
-				
-				brakes_delay += (1* (float)sleep_time) / (float)CH_CFG_ST_FREQUENCY;
-				if (brakes_delay > BRAKES_TIMEOUT)
-					brakes_on = 0;
+			if (brakes < config.pas_brake_voltage_trigger)
+			{
+				output = 0.0;
+				brakes_on++;
+				ramp_time_pos = config.ramp_time_brakes_pos; // Config ramp time for brake positive ramping
+				ramp_time_neg = config.ramp_time_brakes_neg; // Config ramp time for brake negative ramping
+			}
+			else
+			{
+				if (brakes_on > 0)
+				{
+
+					brakes_delay_ticks += (1000 * (float)sleep_time) / (float)CH_CFG_ST_FREQUENCY;
+					if (brakes_delay_ticks < config.pas_brake_delay)
+						output = 0.0;
+					else if (brakes_delay_ticks < (4 * config.pas_brake_delay))
+						ramp_time_pos = config.ramp_time_brakes_pos; // Config ramp time for brake positive ramping
+					else
+					{
+						brakes_delay_ticks = 0;
+						brakes_on = 0;
+					}
+					debug_2 = brakes_on;
+					debug_1 = brakes_delay_ticks;
+				}
+					
 			}
 		}
-		// temporary delay hard coded
+		else if (!config.pas_brake_voltage_inverted && !pas_has_regen)
+		{
+			if (brakes > config.pas_brake_voltage_trigger)
+			{
+				output = 0.0;
+				brakes_on++;
+				ramp_time_neg = config.ramp_time_brakes_neg; // Config ramp time for brake negative ramping
+			}
+			else
+			{
+				if (brakes_on > 0)
+				{
+
+					brakes_delay_ticks += (1000 * (float)sleep_time) / (float)CH_CFG_ST_FREQUENCY;
+					if (brakes_delay_ticks < config.pas_brake_delay)
+						output = 0.0;
+					else if (brakes_delay_ticks < (4 * config.pas_brake_delay))
+						ramp_time_pos = config.ramp_time_brakes_pos; // Config ramp time for brake positive ramping
+					else
+					{
+						brakes_delay_ticks = 0;
+						brakes_on = 0;
+					}
+				}
+			}
+		}
+		else
+		{
+			output = 0.0;
+			ramp_time_pos = config.ramp_time_brakes_pos; // Config ramp time for brake positive ramping
+			ramp_time_neg = config.ramp_time_brakes_neg; // Config ramp time for brake negative ramping
+		}
+
 		// APPLY RAMPING
 		output = apply_ramping(&output, ramp_time_pos, ramp_time_neg, brakes_on);
 
@@ -741,9 +851,7 @@ static THD_FUNCTION(pas_thread, arg)
 		// Reset timeout
 		timeout_reset();
 
-		// print guard function
-
-		// SEND PAS CUSTOM DATA
+		// FORCE SEND PAS CUSTOM DATA
 		// send_pas_data();
 
 		if (primary_output == true)

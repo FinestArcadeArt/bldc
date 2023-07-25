@@ -164,6 +164,11 @@ typedef struct
 	lbm_uint pas_pas_pid_kp;
 	lbm_uint pas_pas_pid_ki;
 	lbm_uint pas_pas_pid_kd;
+	lbm_uint pas_use_adc;
+	lbm_uint pas_has_regen;
+	lbm_uint pas_brake_delay;
+	lbm_uint pas_brake_voltage_trigger;
+	lbm_uint pas_brake_voltage_inverted;
 
 	// Sysinfo
 	lbm_uint hw_name;
@@ -629,7 +634,26 @@ static bool compare_symbol(lbm_uint sym, lbm_uint *comp)
 		{
 			get_add_symbol("pas-pid-kd", comp);
 		}
-
+		else if (comp == &syms_vesc.pas_use_adc)
+		{
+			get_add_symbol("pas-use-adc", comp);
+		}
+		else if (comp == &syms_vesc.pas_has_regen)
+		{
+			get_add_symbol("pas-has-regen", comp);
+		}
+		else if (comp == &syms_vesc.pas_brake_delay)
+		{
+			get_add_symbol("pas-brake-delay", comp);
+		}
+		else if (comp == &syms_vesc.pas_brake_voltage_trigger)
+		{
+			get_add_symbol("pas-brake-voltage-trigger", comp);
+		}
+		else if (comp == &syms_vesc.pas_brake_voltage_inverted)
+		{
+			get_add_symbol("pas-brake-voltage-inverted", comp);
+		}
 		else if (comp == &syms_vesc.hw_name)
 		{
 			get_add_symbol("hw-name", comp);
@@ -3885,6 +3909,26 @@ static lbm_value ext_conf_set(lbm_value *args, lbm_uint argn)
 			appconf->app_pas_conf.pas_pid_kd = lbm_dec_as_float(args[1]);
 			changed_app = 2;
 		}
+		else if (compare_symbol(name, &syms_vesc.pas_use_adc))
+		{
+			appconf->app_pas_conf.pas_use_adc = lbm_dec_as_i32(args[1]);
+			changed_app = 2;
+		}
+		else if (compare_symbol(name, &syms_vesc.pas_has_regen))
+		{
+			appconf->app_pas_conf.pas_has_regen = lbm_dec_as_i32(args[1]);
+			changed_app = 2;
+		}
+		else if (compare_symbol(name, &syms_vesc.pas_brake_delay))
+		{
+			appconf->app_pas_conf.pas_brake_delay = lbm_dec_as_float(args[1]);
+			changed_app = 2;
+		}
+		else if (compare_symbol(name, &syms_vesc.pas_brake_voltage_trigger))
+		{
+			appconf->app_pas_conf.pas_brake_voltage_trigger = lbm_dec_as_float(args[1]);
+			changed_app = 2;
+		}
 	}
 
 	if (changed_mc > 0)
@@ -4273,6 +4317,26 @@ static lbm_value ext_conf_get(lbm_value *args, lbm_uint argn)
 	else if (compare_symbol(name, &syms_vesc.pas_pas_pid_kd))
 	{
 		res = lbm_enc_float(appconf->app_pas_conf.pas_pid_kd);
+	}
+	else if (compare_symbol(name, &syms_vesc.pas_use_adc))
+	{
+		res = lbm_enc_i(appconf->app_pas_conf.pas_use_adc);
+	}
+	else if (compare_symbol(name, &syms_vesc.pas_has_regen))
+	{
+		res = lbm_enc_i(appconf->app_pas_conf.pas_has_regen);
+	}
+	else if (compare_symbol(name, &syms_vesc.pas_brake_delay))
+	{
+		res = lbm_enc_float(appconf->app_pas_conf.pas_brake_delay);
+	}
+	else if (compare_symbol(name, &syms_vesc.pas_brake_voltage_trigger))
+	{
+		res = lbm_enc_float(appconf->app_pas_conf.pas_brake_voltage_trigger);
+	}
+	else if (compare_symbol(name, &syms_vesc.pas_brake_voltage_inverted))
+	{
+		res = lbm_enc_i(appconf->app_pas_conf.pas_brake_voltage_inverted);
 	}
 
 	if (defaultcfg)
