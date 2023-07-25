@@ -461,7 +461,19 @@ void foc_run_pid_control_speed(float dt, motor_all_state_t *motor) {
 		utils_step_towards((float*)&motor->m_speed_pid_set_rpm, motor->m_speed_command_rpm, conf_now->s_pid_ramp_erpms_s * dt);
 	}
 
-	const float rpm = RADPS2RPM_f(motor->m_motor_state.speed_rad_s);
+	float rpm = 0.0;
+	switch (conf_now->s_pid_speed_source) {
+	case S_PID_SPEED_SRC_PLL:
+		rpm = RADPS2RPM_f(motor->m_pll_speed);
+		break;
+	case S_PID_SPEED_SRC_FAST:
+		rpm = RADPS2RPM_f(motor->m_speed_est_fast);
+		break;
+	case S_PID_SPEED_SRC_FASTER:
+		rpm = RADPS2RPM_f(motor->m_speed_est_faster);
+		break;
+	}
+
 	float error = motor->m_speed_pid_set_rpm - rpm;
 
 	// Too low RPM set. Reset state, release motor and return.
@@ -532,7 +544,7 @@ float foc_correct_hall(float angle, float dt, motor_all_state_t *motor, int hall
 	mc_configuration *conf_now = motor->m_conf;
 	motor->m_hall_dt_diff_now += dt;
 
-	float rad_per_sec = (M_PI / 3.0) / motor->m_hall_dt_diff_last;
+	float rad_per_sec = motor->m_speed_est_fast;
 	float rpm_abs = fabsf(RADPS2RPM_f(motor->m_pll_speed));
 	float rpm_abs_hall = fabsf(RADPS2RPM_f(rad_per_sec));
 
@@ -544,7 +556,7 @@ float foc_correct_hall(float angle, float dt, motor_all_state_t *motor, int hall
 	// Only override the observer if the hall sensor value is valid.
 	if (ang_hall_int < 201) {
 		// Scale to the circle and convert to radians
-		float ang_hall_now = ((float)ang_hall_int / 200.0) * 2 * M_PI;
+		float ang_hall_now = ((float)ang_hall_int / 200.0) * 2.0 * M_PI;
 
 		if (motor->m_ang_hall_int_prev < 0) {
 			// Previous angle not valid
@@ -591,18 +603,18 @@ float foc_correct_hall(float angle, float dt, motor_all_state_t *motor, int hall
 		} else {
 			// Interpolate
 			float diff = utils_angle_difference_rad(motor->m_ang_hall, ang_hall_now);
-			if (fabsf(diff) < ((2.0 * M_PI) / 12.0)) {
+			if (fabsf(diff) < ((2.0 * M_PI) / 12.0) || SIGN(diff) != SIGN(rad_per_sec)) {
 				// Do interpolation
 				motor->m_ang_hall += rad_per_sec * dt;
 			} else {
 				// We are too far away with the interpolation
-				motor->m_ang_hall -= diff / 100.0;
+				motor->m_ang_hall -= diff * 0.01;
 			}
 		}
 
 		// Limit hall sensor rate of change. This will reduce current spikes in the current controllers when the angle estimation
 		// changes fast.
-		float angle_step = (fmaxf(rpm_abs_hall, conf_now->foc_hall_interp_erpm) / 60.0) * 2.0 * M_PI * dt * 1.5;
+		float angle_step = (fmaxf(rpm_abs_hall, conf_now->foc_hall_interp_erpm) / 60.0) * 2.0 * M_PI * dt * 1.4;
 		float angle_diff = utils_angle_difference_rad(motor->m_ang_hall, motor->m_ang_hall_rate_limited);
 		if (fabsf(angle_diff) < angle_step) {
 			motor->m_ang_hall_rate_limited = motor->m_ang_hall;

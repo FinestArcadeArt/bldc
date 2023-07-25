@@ -953,126 +953,6 @@ Example that evaluates to 20:
 ``` 
 ---
 
-### @const-start
-
-`@const-start` opens a block of code where each global definition is
-moved to constant memory (flash) automatically. This can be used only together with the
-incremental reader (such as `read-eval-program`).
-
-A `@const-start` opened block should be closed with a `@const-end`. Constant blocks
-cannot be nested. 
-
-Example:
-
-```clj
-@const-start
-
-(defun f (x) (+ x 1))  ; a function stored in constant memory
-
-@const-end
-
-(+ f 2)
-``` 
-
-### @const-end
-
-`@const-end` closes an block opened by `@const-start`.
-
-
-### move-to-flash
-
-A value can be moved to flash storage to save space on the normal evaluation heap or lbm memory.
-A `move-to-flash` expression is of the form `(move-to-flash sym opt-sym1 ... opt-symN)`.
-The symbols `sym`, `opt-sym1 ... opt-symN` should be globally bound to the values you want moved
-to flash. After the value has been moved, the environment binding is updated to point into flash
-memory. **CAUTION** This function should be used carefully. Ideally a value should be moved
-to flash immediately after it is created so there is no chance that other references to original value
-exists.
-
-Example that moves an array to flash storage:
-
-```clj
-(define a [1 2 3 4 5 6])
-
-(move-to-flash a)
-```
-
-Example that moves a list to flash storage:
-
-```clj
-(define ls '(1 2 3 4 5))
-
-(move-to-flash ls)
-```
-
-Functions can be moved to flash storage as well:
-
-```clj
-(defun f (x) (+ x 1))
-
-(move-to-flash f)
-```
-
-### make-env
-
-The `make-env` form allows you to create an environment as a value.
-The form of an `make-env` expression is `(make-env exp)`. When
-The result of running `(make-env exp)` is the resulting environment after
-evaluating the expression `exp`. The resulting environment is an association list.
-
-`make-env` can be used to encapsulate a set of bindings under a name.
-
-Example:
-
-```clj
-(define my-env (make-env {
-        (defun f (x) (+ x 1))
-        (defun g (x y) (+ x y))
-        }))
-```
-
-See `in-env` for how to evaluate expressions inside of a provided environment.
-
----
-
-
-### in-env
-
-The `in-env` form allows the evaluation in an environment that has
-been augmented by an environment (association list) provided.
-The form of an `in-env` expression is `(in-env env-expr expr)`. Here the
-expression `expr` is evaluated with the local environemnt augmented with
-the result of `env-expr`. The resulting environment of a `make-env` application
-is compatible with the `env-expr` of `in-env` but any association list is ok.
-
-Example:
-
-```clj
-(define my-env '( (a . 10) (b . 20)))
-
-(in-env my-env (+ a b))
-```
-
-The example above evaluates to 30.
-
-Example combining `in-env` and `make-env`:
-
-```clj
-(define lib
-  (make-env {
-   (define a 10)
-   (define b 20)
-   (define c 30)
-   }))
-
-
-(in-env lib (+ a b))
-```
-
-
-
----
-
 ## Lists and cons cells
 
 Lists are built using cons cells. A cons cell is represented by the lbm_cons_t struct in the
@@ -1494,21 +1374,25 @@ Example that updates position 1 in a buffer:
 
 ### bufclear
 
-Clears an array by writing zeroes (or a value of choice) to all locations.
-The form of a `bufclear` expression is `(bufclear buf-expr opt-val-expr)`.
-
-Example that clears a buffer:
+To clear a byte array the function bufclear can be used:
 
 ```clj
-(bufclear buf)
+(bufclear arr optByte optStart optLen)
 ```
 
-Example that clears a buffer to all ones:
+Where arr is the byte array to clear, optByte is the optional argument
+of what to clear with (default 0), optStart is the optional argument
+of which position to start clearing (default 0) and optLen is the
+optional argument of how many bytes to clear after start (default the
+entire array). Example:
 
 ```clj
-(bufclear buf 1)
+(bufclear arr) ; Clear all of arr
+(bufclear arr 0xFF) ; Fill arr with 0xFF
+(bufclear arr 0 5) ; Clear from index 5 to the end
+(bufclear arr 0 5 10) ; Clear 10 bytes starting from index 5
+(bufclear arr 0xAA 5 10) ; Set 10 bytes to 0xAA starting from index 5
 ```
-
 ---
 
 ### Byte-array literal syntax
@@ -1951,6 +1835,86 @@ The `variable_not_bound` symbol is returned when evaluating a
 variable (symbol) that is neighter bound nor special (built-in function).
 
 
+## Flash memory
+
+Flash memory can be used to store data and functions that are constant.
+Things can be moved to flash explicitly using the `move-to-flash` function
+or as part of the reading procedure. To move things automatically to flash during
+reading, there are `@`directives.
+
+---
+
+### @const-symbol-strings
+
+if `@const-symbol-strings` directive is placed in a file, symbols will be created
+in flash memory instead of the arrays memory.
+
+---
+
+### @const-start
+
+`@const-start` opens a block of code where each global definition is
+moved to constant memory (flash) automatically. This can be used only together with the
+incremental reader (such as `read-eval-program`).
+
+A `@const-start` opened block should be closed with a `@const-end`. Constant blocks
+cannot be nested.
+
+Example:
+
+```clj
+@const-start
+
+(defun f (x) (+ x 1))  ; a function stored in constant memory
+
+@const-end
+
+(+ f 2)
+```
+
+---
+
+### @const-end
+
+`@const-end` closes an block opened by `@const-start`.
+
+---
+
+### move-to-flash
+
+A value can be moved to flash storage to save space on the normal evaluation heap or lbm memory.
+A `move-to-flash` expression is of the form `(move-to-flash sym opt-sym1 ... opt-symN)`.
+The symbols `sym`, `opt-sym1 ... opt-symN` should be globally bound to the values you want moved
+to flash. After the value has been moved, the environment binding is updated to point into flash
+memory. **CAUTION** This function should be used carefully. Ideally a value should be moved
+to flash immediately after it is created so there is no chance that other references to original value
+exists.
+
+Example that moves an array to flash storage:
+
+```clj
+(define a [1 2 3 4 5 6])
+
+(move-to-flash a)
+```
+
+Example that moves a list to flash storage:
+
+```clj
+(define ls '(1 2 3 4 5))
+
+(move-to-flash ls)
+```
+
+Functions can be moved to flash storage as well:
+
+```clj
+(defun f (x) (+ x 1))
+
+(move-to-flash f)
+```
+
+---
 
 ## Types
 

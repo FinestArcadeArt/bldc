@@ -54,8 +54,19 @@ lbm_uint constants_memory[CONSTANT_MEMORY_SIZE];
 
 bool const_heap_write(lbm_uint ix, lbm_uint w) {
   if (ix >= CONSTANT_MEMORY_SIZE) return false;
-  constants_memory[ix] = w;
-  return true;
+  if (constants_memory[ix] == 0xffffffff) {
+    constants_memory[ix] = w;
+    return true;
+  } else if (constants_memory[ix] == w) {
+    return true;
+  }
+
+  char buf[1024];
+  lbm_print_value(buf, 1024, constants_memory[ix]);
+  printf("prev: %x | %s\n", constants_memory[ix], buf);
+  lbm_print_value(buf, 1024, w);
+  printf("curr: %x | %s\n", w, buf);
+  return false;
 }
 
 static volatile bool allow_print = true;
@@ -204,7 +215,6 @@ void sleep_callback(uint32_t us) {
 
 
 bool dyn_load(const char *str, const char **code) {
-
   bool res = false;
   if (strlen(str) == 5 && strncmp(str, "defun", 5) == 0) {
     *code = "(define defun (macro (name args body) `(define ,name (lambda ,args ,body))))";
@@ -260,7 +270,7 @@ bool dyn_load(const char *str, const char **code) {
 
 lbm_value ext_block(lbm_value *args, lbm_uint argn) {
 
-  printf("blocking CID: %d\n", lbm_get_current_cid());
+  printf("blocking CID: %d\n", (int32_t)lbm_get_current_cid());
   lbm_block_ctx_from_extension();
   return lbm_enc_sym(SYM_TRUE);
 }
@@ -342,31 +352,19 @@ lbm_value ext_unflatten(lbm_value *args, lbm_uint argn) {
 
 char output[128];
 
-static lbm_value ext_range(lbm_value *args, lbm_uint argn) {
-        if (argn != 2 || lbm_type_of(args[0]) != LBM_TYPE_I || lbm_type_of(args[1]) != LBM_TYPE_I) {
-                return lbm_enc_sym(SYM_EERROR);
-        }
-
-        lbm_int start = lbm_dec_i(args[0]);
-        lbm_int end = lbm_dec_i(args[1]);
-
-        if (start > end || (end - start) > 100) {
-                return lbm_enc_sym(SYM_EERROR);
-        }
-
-        lbm_value res = lbm_enc_sym(SYM_NIL);
-
-        for (lbm_int i = end;i >= start;i--) {
-                res = lbm_cons(lbm_enc_i(i), res);
-        }
-
-        return res;
-}
-
 static bool test_destruct(lbm_uint value) {
   printf("destroying custom value\n");
   free((lbm_uint*)value);
   return true;
+}
+
+static lbm_value ext_trigger(lbm_value *args, lbm_uint argn) {
+  if (argn == 1 && lbm_is_number(args[0])) {
+    lbm_trigger_flags(lbm_dec_as_u32(args[0]));
+    return ENC_SYM_TRUE;
+  } else {
+    return ENC_SYM_EERROR;
+  }
 }
 
 static lbm_value ext_custom(lbm_value *args, lbm_uint argn) {
@@ -469,7 +467,7 @@ void lookup_local(eval_context_t *ctx, void *arg1, void *arg2) {
   if (lbm_env_lookup_b(&res, (lbm_value)arg1, ctx->curr_env)) {
 
     lbm_print_value(output, 1024, res);
-    printf("CTX %d: %s = %s\n", ctx->id, (char *)arg2, output);
+    printf("CTX %d: %s = %s\n", (int32_t)ctx->id, (char *)arg2, output);
   } else {
     printf("not found\n");
   }
@@ -526,6 +524,7 @@ int main(int argc, char **argv) {
     return 0;
   }
 
+  memset(constants_memory, 0xFF, CONSTANT_MEMORY_SIZE * sizeof(lbm_uint));
   if (!lbm_const_heap_init(const_heap_write,
                            &const_heap,constants_memory,
                            CONSTANT_MEMORY_SIZE)) {
@@ -596,6 +595,12 @@ int main(int argc, char **argv) {
   else
     printf("Error adding extension.\n");
 
+  res = lbm_add_extension("trigger", ext_trigger);
+  if (res)
+    printf("Extension added.\n");
+  else
+    printf("Error adding extension.\n");
+
 
   /* Start evaluator thread */
   if (pthread_create(&lispbm_thd, NULL, eval_thd_wrapper, NULL)) {
@@ -634,8 +639,10 @@ int main(int argc, char **argv) {
       printf("Memory size: %"PRI_UINT" Words\n", lbm_memory_num_words());
       printf("Memory free: %"PRI_UINT" Words\n", lbm_memory_num_free());
       printf("Allocated arrays: %"PRI_UINT"\n", heap_state.num_alloc_arrays);
-      printf("Symbol table size: %"PRI_UINT" Bytes\n", lbm_get_symbol_table_size());
-      printf("Symbol names size: %"PRI_UINT" Bytes\n", lbm_get_symbol_table_size_names());
+      printf("Symbol table size RAM: %"PRI_UINT" Bytes\n", lbm_get_symbol_table_size());
+      printf("Symbol names size RAM: %"PRI_UINT" Bytes\n", lbm_get_symbol_table_size_names());
+      printf("Symbol table size FLASH: %"PRI_UINT" Bytes\n", lbm_get_symbol_table_size_flash());
+      printf("Symbol names size FLASH: %"PRI_UINT" Bytes\n", lbm_get_symbol_table_size_names_flash());
       free(str);
     }  else if (strncmp(str, ":env", 4) == 0) {
       lbm_value curr = *lbm_get_env_ptr();
@@ -671,7 +678,7 @@ int main(int argc, char **argv) {
           sleep_callback(10);
         }
 
-        lbm_cid cid = lbm_load_and_eval_program_incremental(&string_tok);
+        (void)lbm_load_and_eval_program_incremental(&string_tok);
         lbm_continue_eval();
 
         //printf("started ctx: %"PRI_UINT"\n", cid);
@@ -723,6 +730,14 @@ int main(int argc, char **argv) {
                  print_stack_storage, PRINT_STACK_SIZE,
                  extension_storage, EXTENSION_STORAGE_SIZE);
 
+        if (!lbm_const_heap_init(const_heap_write,
+                           &const_heap,constants_memory,
+                           CONSTANT_MEMORY_SIZE)) {
+          return 0;
+        } else {
+          printf("Constants memory initialized\n");
+        }
+  
         lbm_variables_init(variable_storage, VARIABLE_STORAGE_SIZE);
 
         if (lbm_array_extensions_init()) {
@@ -765,6 +780,14 @@ int main(int argc, char **argv) {
                print_stack_storage, PRINT_STACK_SIZE,
                extension_storage, EXTENSION_STORAGE_SIZE);
 
+      if (!lbm_const_heap_init(const_heap_write,
+                               &const_heap,constants_memory,
+                               CONSTANT_MEMORY_SIZE)) {
+        return 0;
+      } else {
+        printf("Constants memory initialized\n");
+      }
+  
       lbm_variables_init(variable_storage, VARIABLE_STORAGE_SIZE);
 
       if (lbm_array_extensions_init()) {
@@ -784,6 +807,50 @@ int main(int argc, char **argv) {
       } else {
         printf("Loading math extensions failed\n");
       }
+
+      if (lbm_runtime_extensions_init(false)) {
+        printf("Runtime extensions loaded\n");
+      } else {
+        printf("Loading runtime extensions failed\n");
+      }
+
+      res = lbm_add_extension("block", ext_block);
+      if (res)
+        printf("Extension added.\n");
+      else
+        printf("Error adding extension.\n");
+
+      res = lbm_add_extension("print", ext_print);
+      if (res)
+        printf("Extension added.\n");
+      else
+        printf("Error adding extension.\n");
+
+      res = lbm_add_extension("custom", ext_custom);
+      if (res)
+        printf("Extension added.\n");
+      else
+        printf("Error adding extension.\n");
+
+      res = lbm_add_extension("event", ext_event);
+      if (res)
+        printf("Extension added.\n");
+      else
+        printf("Error adding extension.\n");
+
+      res = lbm_add_extension("unflatten", ext_unflatten);
+      if (res)
+        printf("Extension added.\n");
+      else
+        printf("Error adding extension.\n");
+
+      res = lbm_add_extension("trigger", ext_trigger);
+      if (res)
+        printf("Extension added.\n");
+      else
+        printf("Error adding extension.\n");
+
+      
 
       lbm_add_extension("print", ext_print);
       free(str);
@@ -854,7 +921,7 @@ int main(int argc, char **argv) {
       lbm_create_string_char_channel(&string_tok_state,
                                      &string_tok,
                                      str);
-      lbm_cid cid = lbm_load_and_eval_expression(&string_tok);
+      (void)lbm_load_and_eval_expression(&string_tok);
       lbm_continue_eval();
 
       //printf("started ctx: %"PRI_UINT"\n", cid);

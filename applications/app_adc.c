@@ -139,6 +139,7 @@ float app_adc_get_voltage2(void)
 void app_adc_detach_adc(int detach)
 {
 	adc_detached = detach;
+	timeout_reset();
 }
 
 void app_adc_adc1_override(float val)
@@ -146,6 +147,7 @@ void app_adc_adc1_override(float val)
 	val = utils_map(val, 0.0, 1.0, 0.0, 3.3);
 	utils_truncate_number(&val, 0, 3.3);
 	adc1_override = val;
+	timeout_reset();
 }
 
 void app_adc_adc2_override(float val)
@@ -153,21 +155,25 @@ void app_adc_adc2_override(float val)
 	val = utils_map(val, 0.0, 1.0, 0.0, 3.3);
 	utils_truncate_number(&val, 0, 3.3);
 	adc2_override = val;
+	timeout_reset();
 }
 
 void app_adc_detach_buttons(bool state)
 {
 	buttons_detached = state;
+	timeout_reset();
 }
 
 void app_adc_rev_override(bool state)
 {
 	rev_override = state;
+	timeout_reset();
 }
 
 void app_adc_cc_override(bool state)
 {
 	cc_override = state;
+	timeout_reset();
 }
 
 static THD_FUNCTION(adc_thread, arg)
@@ -368,8 +374,11 @@ static THD_FUNCTION(adc_thread, arg)
 			continue;
 		}
 
-		switch (config.ctrl_type)
-		{
+		if (adc_detached && timeout_has_timeout()) {
+			continue;
+		}
+
+		switch (config.ctrl_type) {
 		case ADC_CTRL_TYPE_CURRENT_REV_CENTER:
 		case ADC_CTRL_TYPE_CURRENT_REV_BUTTON_BRAKE_CENTER:
 		case ADC_CTRL_TYPE_CURRENT_NOREV_BRAKE_CENTER:
@@ -564,8 +573,10 @@ static THD_FUNCTION(adc_thread, arg)
 			continue;
 		}
 
-		// Reset timeout
-		timeout_reset();
+		// Reset timeout only when the ADC-app is not detached
+		if (!adc_detached) {
+			timeout_reset();
+		}
 
 		// If c is pressed and no throttle is used, maintain the current speed with PID control
 		static bool was_pid = false;

@@ -11,8 +11,22 @@
 	* Incremental read of uploaded code.
 	* Removed array types other than byte arrays.
 	* Added more position extensions.
-* Hall sensors: smooth transition to sensorless.
+	* Use timeout when app_adc is detached.
+	* Added extension conf-restore-mc.
+	* Added extension conf-restore-app.
+	* Added extension conf-dc-cal.
+	* Added access to several config parameters.
+	* Many improvements and bug fixes.
+	* Better error descriptions.
+* Hall sensors improvements:
+	* Smooth transition to sensorless.
+	* Bug fix in interpolation.
+	* Use less noisy speed estimator for interpolation.
+	* Adjusted rate limit.
 * Added soft regen cutoff. See https://github.com/vedderb/vesc_tool/pull/310
+* Attempt at limiting the input current when using MTPA and field weakening.
+* Removed built-in balance app. The balance-package can be used instead, which is where new development is done.
+* Added option to select PID-controller speed source.
 
 ### 6.02
 #### 2023-03-12

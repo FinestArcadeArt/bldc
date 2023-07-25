@@ -35,9 +35,10 @@ extern "C" {
 
 #define EVAL_CPS_DEFAULT_MAILBOX_SIZE 10
 
-#define EVAL_CPS_CONTEXT_FLAG_NOTHING       (uint32_t)0x0
-#define EVAL_CPS_CONTEXT_FLAG_TRAP          (uint32_t)0x1
-#define EVAL_CPS_CONTEXT_FLAG_CONST         (uint32_t)0x2
+#define EVAL_CPS_CONTEXT_FLAG_NOTHING               (uint32_t)0x0
+#define EVAL_CPS_CONTEXT_FLAG_TRAP                  (uint32_t)0x1
+#define EVAL_CPS_CONTEXT_FLAG_CONST                 (uint32_t)0x2
+#define EVAL_CPS_CONTEXT_FLAG_CONST_SYMBOL_STRINGS  (uint32_t)0x4
   
 /** The eval_context_t struct represents a lispbm process.
  *
@@ -58,6 +59,7 @@ typedef struct eval_context_s{
   lbm_uint sleep_us;
   lbm_cid id;
   lbm_cid parent;
+  lbm_uint wait_mask;
   /* while reading */
   lbm_int row0;
   lbm_int row1;
@@ -75,7 +77,7 @@ typedef struct {
   lbm_event_type_t type;
   lbm_uint parameter;
   lbm_uint buf_ptr;
-  uint32_t  buf_len;
+  lbm_uint buf_len;
 } lbm_event_t;
 
 /** Fundamental operation type */
@@ -142,6 +144,12 @@ bool lbm_event(lbm_flat_value_t *fv);
  * \return true on success.
  */
 bool lbm_event_unboxed(lbm_value unboxed);
+
+/** Trigger a flag to wake up all tasks waiting on that flag.
+ * \param wait_for_flags Flags to trigger.
+ */
+void lbm_trigger_flags(uint32_t wait_for_flags);
+
 /** Remove a context that has finished executing and free up its associated memory.
  *
  * \param cid Context id of context to free.
