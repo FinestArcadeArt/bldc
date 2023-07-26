@@ -13,11 +13,11 @@ This is a better implementation of the PAS_app, it includes:
 - faster PAS which takes pedal rpm to calculate time out
 - Modified adc-pas implementation to re-route adc in the pas app (and benefit from adc setup but also from speed limit)
 - Most of the settings/parameters are accessible in LISP
-- And of course full Eggrider support, with level of assist, speed limit change, standard power/current/regen...etc settings directly from app (similar to what we have for ASI right now)
+- And of course full Eggrider suppor (Fw 2.7+ so you will need to wait or contact us directly), with level of assist, speed limit change per assist level, standard power/current/regen...etc settings directly from app (similar to what we have for ASI right now)
 - Specific HW conf for the FS-75200 (which is one of my test VESC)
 
 All of this is totally WIP right now, but should stable really soon. 
-Updates will be refereced here.
+Updates will be referenced here.
 
 
 
