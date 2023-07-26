@@ -772,6 +772,10 @@ typedef struct
 	float pas_brake_delay;
 	float pas_brake_voltage_trigger;
 	bool pas_brake_voltage_inverted;
+	float pas_pid_start_percent;
+	uint8_t pas_hall_torque_samples;
+	float pas_hall_torque_offset;
+	float pas_hall_torque_gain;
 } pas_config;
 
 // NRF Datatypes

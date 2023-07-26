@@ -65,6 +65,7 @@ static volatile bool is_running = false;
 // THROTTLE/BRAKE INTEGRATION
 static volatile bool pas_use_adc = true;
 static volatile bool pas_has_regen = false;
+
 // TORQUE SENSOR
 static volatile float torque_ratio = 0.0;
 static volatile float min_start_torque = 0.5; // put this later in config
@@ -91,6 +92,9 @@ static volatile uint16_t print_trigger = 0;
 static volatile uint16_t pas_data_trigger = 0;
 static volatile bool torque_started = false;
 static volatile uint8_t torque_smoothing_trigger = 0; // 2ms loop = 10* 10 = 100ms
+static volatile float pas_hall_torque_offset;
+static volatile float pas_hall_torque_gain;	
+static volatile uint8_t pas_hall_torque_samples;
 
 // PID
 static volatile float kp = 0.02;				   // Proportional gain
@@ -102,10 +106,11 @@ static volatile float error_ki = 0.0;			   // Integral error
 static volatile float error_kd = 0.0;			   // Derivative error
 static volatile float output_pid = 0.0;
 static volatile float current_speed_goal = 0;
+static volatile float pas_pid_start_percent;
 
 // DEBUG
-static volatile float debug_1;
-static volatile uint16_t debug_2;
+//static volatile float debug_1;
+//static volatile uint16_t debug_2;
 
 /**
  * Configure and initialize PAS application
@@ -131,6 +136,7 @@ void app_pas_configure(pas_config *conf)
 	kp = config.pas_pid_kp;
 	ki = config.pas_pid_ki;
 	kd = config.pas_pid_kd;
+	pas_pid_start_percent = config.pas_pid_start_percent;
 
 	// get initial speed limit
 	max_speed = config.pas_max_speed;
@@ -140,6 +146,13 @@ void app_pas_configure(pas_config *conf)
 
 	// check if regen is needed
 	pas_has_regen = config.pas_has_regen;
+
+	// init torque sensor
+	pas_hall_torque_offset = config.pas_hall_torque_offset;
+	pas_hall_torque_gain = config.pas_hall_torque_gain;
+	pas_hall_torque_samples = config.pas_hall_torque_samples;
+
+
 }
 
 /**
@@ -190,6 +203,7 @@ void app_pas_set_current_sub_scaling(float current_sub_scaling)
 	sub_scaling = current_sub_scaling;
 }
 
+//APP PAS CALLING FUNCTIONS
 float app_pas_get_current_target_rel(void)
 {
 
@@ -213,14 +227,14 @@ float app_pas_get_pedal_torque(void)
 
 float app_pas_get_kp(void)
 {
-	// return kp * error;
-	return debug_1;
+	return kp * error;
+	//return debug_1;
 }
 
 float app_pas_get_ki(void)
 {
-	// return ki * error_ki;
-	return debug_2;
+  return ki * error_ki;
+	//return debug_2;
 }
 
 float app_pas_get_kd(void)
@@ -272,6 +286,7 @@ void send_pas_data(void) // disabled for now maybe, use it later to send debug d
 	}
 }
 
+// OUTPUT FUNCTIONS
 float apply_pid_speed_limiting(float *input_value, float max_set_speed)
 {
 
@@ -285,7 +300,7 @@ float apply_pid_speed_limiting(float *input_value, float max_set_speed)
 	ki = config.pas_pid_ki;
 	kd = config.pas_pid_kd;
 	// Calculate the error (difference between desired speed and current speed)
-	error = ((max_speed - current_speed) * 100) / (max_speed * 0.2); // this should create an error at 100% by 80% of max speed
+	error = ((max_speed - current_speed) * 100) / (max_speed * pas_pid_start_percent); // this should create an error at 100% by 80% of max speed
 	error = fmin(fmax(error, -100.0), 100.0);
 	// guard from under threshold actions or too motivated ki
 	if (error >= 100)
@@ -353,6 +368,7 @@ float apply_ramping(float *input_value, float ramp_time_pos, float ramp_time_neg
 	return *input_value;
 }
 
+//INPUT FUNCTIONS
 float get_throttle_input(float *input_value)
 {
 	throttle_input = app_adc_get_decoded_level();
@@ -368,6 +384,7 @@ float get_brakes_input(float *input_value)
 	*input_value = brake_input;
 	return *input_value;
 }
+
 void pas_event_handler(void)
 {
 #ifdef HW_HAS_3_WIRES_PAS_SENSOR
@@ -448,7 +465,7 @@ void pas_event_handler(void)
 		sample_time = uptime + downtime;
 		if (sample_time > (config.magnets * 2))
 		{
-			drift_percent = ((((uptime * 100) / sample_time) - 36) * -1) * 5; // 5 is a calibration factor to get percentage and 36 is the offset
+			drift_percent = ((((uptime * 100) / sample_time) - config.pas_hall_torque_offset) * -1) * config.pas_hall_torque_gain; // 5 is a calibration factor to get percentage and 36 is the offset
 			uptime = 0;
 			downtime = 0;
 		}
@@ -458,7 +475,7 @@ void pas_event_handler(void)
 
 		// reaching for smoother values
 		torque_smoothing_trigger++;
-		if (torque_smoothing_trigger > 8)
+		if (torque_smoothing_trigger > pas_hall_torque_samples)
 		{
 
 			if (drift_percent > torque_percent)
@@ -530,6 +547,8 @@ void pas_event_handler(void)
 	}
 #endif
 }
+
+// MAIN THREAD
 static THD_FUNCTION(pas_thread, arg)
 {
 	(void)arg;
@@ -753,12 +772,7 @@ static THD_FUNCTION(pas_thread, arg)
 
 		// BRAKES
 		brakes = get_brakes_input(&brakes);
-		// static uint16_t delay_to_print = 0;
-		//  if (delay_to_print++ > 100)
-		//  {
-		//  	delay_to_print = 0;
-		//  	commands_printf("brakes: %.2f, max_speed: %.2f,pas_has_regen: %d, pas_use_adc: %d, output: %.2f,  \n", (double)brakes, (double)max_speed, (int)pas_has_regen, (int)pas_use_adc, (double)output);
-		//  }
+
 		float ramp_time_pos = config.ramp_time_pos; // Config ramp time for positive ramping
 		float ramp_time_neg = config.ramp_time_neg; // Config ramp time for negative ramping
 
@@ -788,8 +802,6 @@ static THD_FUNCTION(pas_thread, arg)
 						brakes_delay_ticks = 0;
 						brakes_on = 0;
 					}
-					debug_2 = brakes_on;
-					debug_1 = brakes_delay_ticks;
 				}
 					
 			}
@@ -854,6 +866,15 @@ static THD_FUNCTION(pas_thread, arg)
 		// FORCE SEND PAS CUSTOM DATA
 		// send_pas_data();
 
+		//DEBUG PRINT
+		static uint16_t delay_to_print = 0;
+		//  if (delay_to_print++ > 100)
+		//  {
+		//  	delay_to_print = 0;
+		//  	//commands_printf("brakes: %.2f, max_speed: %.2f,pas_has_regen: %d, pas_use_adc: %d, output: %.2f,  \n", (double)brakes, (double)max_speed, (int)pas_has_regen, (int)pas_use_adc, (double)output);
+		// 	commands_printf("pas_hall_torque_offset %.2f, pas_hall_torque_gain %.2f, pas_hall_torque_samples %d \n", (double)pas_hall_torque_offset, (double)pas_hall_torque_gain, (int)pas_hall_torque_samples);
+
+		// }
 		if (primary_output == true)
 		{
 			mc_interface_set_current_rel(output);

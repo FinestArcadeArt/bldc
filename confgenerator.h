@@ -9,7 +9,7 @@
 
 // Constants
 #define MCCONF_SIGNATURE		4014639014
-#define APPCONF_SIGNATURE		901180800
+#define APPCONF_SIGNATURE		1095636881
 
 // Functions
 int32_t confgenerator_serialize_mcconf(uint8_t *buffer, const mc_configuration *conf);

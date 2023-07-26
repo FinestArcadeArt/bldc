@@ -3,9 +3,9 @@
 #include <string.h>
 #include "buffer.h"
 #include "conf_general.h"
-#include "confgenerator.h"
+#include "confgenerator..h"
 
-int32_t confgenerator_serialize_mcconf(uint8_t *buffer, const mc_configuration *conf) {
+int32_t confgenerator._serialize_mcconf(uint8_t *buffer, const mc_configuration *conf) {
 	int32_t ind = 0;
 
 	buffer_append_uint32(buffer, MCCONF_SIGNATURE, &ind);
@@ -209,7 +209,7 @@ int32_t confgenerator_serialize_mcconf(uint8_t *buffer, const mc_configuration *
 	return ind;
 }
 
-int32_t confgenerator_serialize_appconf(uint8_t *buffer, const app_configuration *conf) {
+int32_t confgenerator._serialize_appconf(uint8_t *buffer, const app_configuration *conf) {
 	int32_t ind = 0;
 
 	buffer_append_uint32(buffer, APPCONF_SIGNATURE, &ind);
@@ -352,7 +352,7 @@ int32_t confgenerator_serialize_appconf(uint8_t *buffer, const app_configuration
 	return ind;
 }
 
-bool confgenerator_deserialize_mcconf(const uint8_t *buffer, mc_configuration *conf) {
+bool confgenerator._deserialize_mcconf(const uint8_t *buffer, mc_configuration *conf) {
 	int32_t ind = 0;
 
 	uint32_t signature = buffer_get_uint32(buffer, &ind);
@@ -559,7 +559,7 @@ bool confgenerator_deserialize_mcconf(const uint8_t *buffer, mc_configuration *c
 	return true;
 }
 
-bool confgenerator_deserialize_appconf(const uint8_t *buffer, app_configuration *conf) {
+bool confgenerator._deserialize_appconf(const uint8_t *buffer, app_configuration *conf) {
 	int32_t ind = 0;
 
 	uint32_t signature = buffer_get_uint32(buffer, &ind);
@@ -705,7 +705,7 @@ bool confgenerator_deserialize_appconf(const uint8_t *buffer, app_configuration 
 	return true;
 }
 
-void confgenerator_set_defaults_mcconf(mc_configuration *conf) {
+void confgenerator._set_defaults_mcconf(mc_configuration *conf) {
 	conf->pwm_mode = MCCONF_PWM_MODE;
 	conf->comm_mode = MCCONF_COMM_MODE;
 	conf->motor_type = MCCONF_DEFAULT_MOTOR_TYPE;
@@ -903,7 +903,7 @@ void confgenerator_set_defaults_mcconf(mc_configuration *conf) {
 	conf->bms.fwd_can_mode = MCCONF_BMS_FWD_CAN_MODE;
 }
 
-void confgenerator_set_defaults_appconf(app_configuration *conf) {
+void confgenerator._set_defaults_appconf(app_configuration *conf) {
 	conf->controller_id = HW_DEFAULT_ID;
 	conf->timeout_msec = APPCONF_TIMEOUT_MSEC;
 	conf->timeout_brake_current = APPCONF_TIMEOUT_BRAKE_CURRENT;
