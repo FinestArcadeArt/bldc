@@ -93,7 +93,7 @@ static volatile uint16_t pas_data_trigger = 0;
 static volatile bool torque_started = false;
 static volatile uint8_t torque_smoothing_trigger = 0; // 2ms loop = 10* 10 = 100ms
 static volatile float pas_hall_torque_offset;
-static volatile float pas_hall_torque_gain;	
+static volatile float pas_hall_torque_gain;
 static volatile uint8_t pas_hall_torque_samples;
 
 // PID
@@ -109,8 +109,8 @@ static volatile float current_speed_goal = 0;
 static volatile float pas_pid_start_percent;
 
 // DEBUG
-//static volatile float debug_1;
-//static volatile uint16_t debug_2;
+// static volatile float debug_1;
+// static volatile uint16_t debug_2;
 
 /**
  * Configure and initialize PAS application
@@ -139,7 +139,7 @@ void app_pas_configure(pas_config *conf)
 	pas_pid_start_percent = config.pas_pid_start_percent;
 
 	// get initial speed limit
-	//max_speed = config.pas_max_speed;
+	// max_speed = config.pas_max_speed;
 
 	// Initialize adc rerouting
 	pas_use_adc = config.pas_use_adc;
@@ -151,8 +151,6 @@ void app_pas_configure(pas_config *conf)
 	pas_hall_torque_offset = config.pas_hall_torque_offset;
 	pas_hall_torque_gain = config.pas_hall_torque_gain;
 	pas_hall_torque_samples = config.pas_hall_torque_samples;
-
-
 }
 
 /**
@@ -198,6 +196,7 @@ void app_pas_stop(void)
 	}
 }
 
+// APP PAS SET FUNCTIONS
 void app_pas_set_current_sub_scaling(float current_sub_scaling)
 {
 	sub_scaling = current_sub_scaling;
@@ -207,7 +206,8 @@ void app_pas_set_assist_max_speed(float assist_max_speed)
 {
 	max_speed = assist_max_speed;
 }
-//APP PAS CALLING FUNCTIONS
+
+// APP PAS CALLING FUNCTIONS
 float app_pas_get_current_target_rel(void)
 {
 
@@ -232,13 +232,13 @@ float app_pas_get_pedal_torque(void)
 float app_pas_get_kp(void)
 {
 	return kp * error;
-	//return debug_1;
+	// return debug_1;
 }
 
 float app_pas_get_ki(void)
 {
-  return ki * error_ki;
-	//return debug_2;
+	return ki * error_ki;
+	// return debug_2;
 }
 
 float app_pas_get_kd(void)
@@ -365,14 +365,13 @@ float apply_ramping(float *input_value, float ramp_time_pos, float ramp_time_neg
 
 		utils_step_towards(&output_ramp, *input_value, ramp_step);
 
-		// APPLY MAX POWER LIMITING
-		*input_value = utils_map(output_ramp, 0, 1.0, 0.0, config.current_scaling);
+		*input_value = utils_map(output_ramp, 0, 1.0, 0, 1.0);
 		last_time = chVTGetSystemTimeX();
 	}
 	return *input_value;
 }
 
-//INPUT FUNCTIONS
+// INPUT FUNCTIONS
 float get_throttle_input(float *input_value)
 {
 	throttle_input = app_adc_get_decoded_level();
@@ -643,6 +642,8 @@ static THD_FUNCTION(pas_thread, arg)
 			{
 
 				output = (utils_throttle_curve((torque_percent / 100), -0.95, 0, 0)) + 0.001; // use exp curving to compensate bad TS and add a minimum 0.001 too
+				output = fmin(fmax(output, 0.0), 1.0);
+
 			}
 			else
 			{
@@ -767,11 +768,21 @@ static THD_FUNCTION(pas_thread, arg)
 			break;
 		}
 
+		// APPLY PAS LIMITATION
+		output = output * (config.current_scaling / 100) * sub_scaling;
+
+		static uint16_t delay_to_print = 0;
+		 if (delay_to_print++ > 100)
+		 {
+		 	delay_to_print = 0;
+		 	//commands_printf("output %.2f, config.current_scaling %.2f, sub_scaling %.2f \n", (double)output, (double) config.current_scaling, (double) sub_scaling);
+			//commands_printf("pas_hall_torque_offset %.2f, pas_hall_torque_gain %.2f, pas_hall_torque_samples %d \n", (double)pas_hall_torque_offset, (double)pas_hall_torque_gain, (int)pas_hall_torque_samples);
+		}
 		// GET THROTTLE INPUT
 		output = get_throttle_input(&output);
 
 		// APPLY SPEED LIMITING
-		//max_speed = config.pas_max_speed;
+		// max_speed = config.pas_max_speed;
 		output = apply_pid_speed_limiting(&output, max_speed);
 
 		// BRAKES
@@ -807,7 +818,6 @@ static THD_FUNCTION(pas_thread, arg)
 						brakes_on = 0;
 					}
 				}
-					
 			}
 		}
 		else if (!config.pas_brake_voltage_inverted && !pas_has_regen)
@@ -870,13 +880,13 @@ static THD_FUNCTION(pas_thread, arg)
 		// FORCE SEND PAS CUSTOM DATA
 		// send_pas_data();
 
-		//DEBUG PRINT
-		// static uint16_t delay_to_print = 0;
-		//  if (delay_to_print++ > 100)
-		//  {
-		//  	delay_to_print = 0;
-		//  	commands_printf("brakes: %.2f, max_speed: %.2f,throttle: %.2f, pas_use_adc: %d, output: %.2f,  \n", (double)brakes, (double)max_speed, (double)throttle_input, (int)pas_use_adc, (double)output);
-		// 	//commands_printf("pas_hall_torque_offset %.2f, pas_hall_torque_gain %.2f, pas_hall_torque_samples %d \n", (double)pas_hall_torque_offset, (double)pas_hall_torque_gain, (int)pas_hall_torque_samples);
+		// DEBUG PRINT
+		//  static uint16_t delay_to_print = 0;
+		//   if (delay_to_print++ > 100)
+		//   {
+		//   	delay_to_print = 0;
+		//   	commands_printf("brakes: %.2f, max_speed: %.2f,throttle: %.2f, pas_use_adc: %d, output: %.2f,  \n", (double)brakes, (double)max_speed, (double)throttle_input, (int)pas_use_adc, (double)output);
+		//  	//commands_printf("pas_hall_torque_offset %.2f, pas_hall_torque_gain %.2f, pas_hall_torque_samples %d \n", (double)pas_hall_torque_offset, (double)pas_hall_torque_gain, (int)pas_hall_torque_samples);
 
 		// }
 		if (primary_output == true)
