@@ -139,7 +139,7 @@ void app_pas_configure(pas_config *conf)
 	pas_pid_start_percent = config.pas_pid_start_percent;
 
 	// get initial speed limit
-	max_speed = config.pas_max_speed;
+	//max_speed = config.pas_max_speed;
 
 	// Initialize adc rerouting
 	pas_use_adc = config.pas_use_adc;
@@ -203,6 +203,10 @@ void app_pas_set_current_sub_scaling(float current_sub_scaling)
 	sub_scaling = current_sub_scaling;
 }
 
+void app_pas_set_assist_max_speed(float assist_max_speed)
+{
+	max_speed = assist_max_speed;
+}
 //APP PAS CALLING FUNCTIONS
 float app_pas_get_current_target_rel(void)
 {
@@ -300,7 +304,7 @@ float apply_pid_speed_limiting(float *input_value, float max_set_speed)
 	ki = config.pas_pid_ki;
 	kd = config.pas_pid_kd;
 	// Calculate the error (difference between desired speed and current speed)
-	error = ((max_speed - current_speed) * 100) / (max_speed * pas_pid_start_percent); // this should create an error at 100% by 80% of max speed
+	error = ((max_set_speed - current_speed) * 100) / (max_set_speed * pas_pid_start_percent); // this should create an error at 100% by 80% of max speed
 	error = fmin(fmax(error, -100.0), 100.0);
 	// guard from under threshold actions or too motivated ki
 	if (error >= 100)
@@ -767,7 +771,7 @@ static THD_FUNCTION(pas_thread, arg)
 		output = get_throttle_input(&output);
 
 		// APPLY SPEED LIMITING
-		max_speed = config.pas_max_speed;
+		//max_speed = config.pas_max_speed;
 		output = apply_pid_speed_limiting(&output, max_speed);
 
 		// BRAKES
