@@ -867,12 +867,12 @@ static THD_FUNCTION(pas_thread, arg)
 		// send_pas_data();
 
 		//DEBUG PRINT
-		static uint16_t delay_to_print = 0;
+		// static uint16_t delay_to_print = 0;
 		//  if (delay_to_print++ > 100)
 		//  {
 		//  	delay_to_print = 0;
-		//  	//commands_printf("brakes: %.2f, max_speed: %.2f,pas_has_regen: %d, pas_use_adc: %d, output: %.2f,  \n", (double)brakes, (double)max_speed, (int)pas_has_regen, (int)pas_use_adc, (double)output);
-		// 	commands_printf("pas_hall_torque_offset %.2f, pas_hall_torque_gain %.2f, pas_hall_torque_samples %d \n", (double)pas_hall_torque_offset, (double)pas_hall_torque_gain, (int)pas_hall_torque_samples);
+		//  	commands_printf("brakes: %.2f, max_speed: %.2f,throttle: %.2f, pas_use_adc: %d, output: %.2f,  \n", (double)brakes, (double)max_speed, (double)throttle_input, (int)pas_use_adc, (double)output);
+		// 	//commands_printf("pas_hall_torque_offset %.2f, pas_hall_torque_gain %.2f, pas_hall_torque_samples %d \n", (double)pas_hall_torque_offset, (double)pas_hall_torque_gain, (int)pas_hall_torque_samples);
 
 		// }
 		if (primary_output == true)
