@@ -109,7 +109,7 @@ static volatile float current_speed_goal = 0;
 static volatile float pas_pid_start_percent;
 
 // DEBUG
-// static volatile float debug_1;
+ static volatile float drift_percent_check;
 // static volatile uint16_t debug_2;
 
 /**
@@ -231,14 +231,14 @@ float app_pas_get_pedal_torque(void)
 
 float app_pas_get_kp(void)
 {
-	return kp * error;
-	// return debug_1;
+	//return kp * error;
+	return drift_percent_check;
 }
 
 float app_pas_get_ki(void)
 {
-	return ki * error_ki;
-	// return debug_2;
+	//return ki * error_ki;
+	return drift_percent;
 }
 
 float app_pas_get_kd(void)
@@ -468,6 +468,7 @@ void pas_event_handler(void)
 		sample_time = uptime + downtime;
 		if (sample_time > (config.magnets * 2))
 		{
+			drift_percent_check= (uptime * 100) / sample_time;
 			drift_percent = ((((uptime * 100) / sample_time) - config.pas_hall_torque_offset) * -1) * config.pas_hall_torque_gain; // 5 is a calibration factor to get percentage and 36 is the offset
 			uptime = 0;
 			downtime = 0;
