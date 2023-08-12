@@ -698,8 +698,9 @@ static THD_FUNCTION(pas_thread, arg)
 
 			if (pedal_rpm > (config.pedal_rpm_start + 1.0))
 			{
-				output = utils_map(pedal_rpm, config.pedal_rpm_start, config.pedal_rpm_end, 0.0, config.current_scaling * sub_scaling);
-				utils_truncate_number(&output, 0.0, config.current_scaling * sub_scaling);	
+				// currently linearly increasing pedal_rpm importance. needs to be done nicely and parametrically
+				output = utils_map(pedal_rpm, config.pedal_rpm_start, config.pedal_rpm_end, 0.0, 1.0);
+				utils_truncate_number(&output, 0.0, 1.0);	
 				output += torque_ratio;
 				output = fmin(fmax(output, 0.0), 1.0);
 				ms_without_cadence = 0.0;
