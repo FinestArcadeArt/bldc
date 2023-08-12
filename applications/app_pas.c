@@ -770,13 +770,13 @@ static THD_FUNCTION(pas_thread, arg)
 		}
 
 		// APPLY PAS LIMITATION
-		output = output * (config.current_scaling / 100) * sub_scaling;
+		output = output * config.current_scaling * sub_scaling;
 
 		static uint16_t delay_to_print = 0;
 		 if (delay_to_print++ > 100)
 		 {
 		 	delay_to_print = 0;
-		 	//commands_printf("output %.2f, config.current_scaling %.2f, sub_scaling %.2f \n", (double)output, (double) config.current_scaling, (double) sub_scaling);
+		 	commands_printf("output %.2f, config.current_scaling %.2f, sub_scaling %.2f \n", (double)output, (double) config.current_scaling, (double) sub_scaling);
 			//commands_printf("pas_hall_torque_offset %.2f, pas_hall_torque_gain %.2f, pas_hall_torque_samples %d \n", (double)pas_hall_torque_offset, (double)pas_hall_torque_gain, (int)pas_hall_torque_samples);
 		}
 		// GET THROTTLE INPUT
