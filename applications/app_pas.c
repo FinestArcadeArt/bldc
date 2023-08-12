@@ -698,8 +698,10 @@ static THD_FUNCTION(pas_thread, arg)
 
 			if (pedal_rpm > (config.pedal_rpm_start + 1.0))
 			{
-				output = config.current_scaling * torque_ratio * sub_scaling;
-				utils_truncate_number(&output, 0.0, config.current_scaling * sub_scaling);
+				output = utils_map(pedal_rpm, config.pedal_rpm_start, config.pedal_rpm_end, 0.0, config.current_scaling * sub_scaling);
+				utils_truncate_number(&output, 0.0, config.current_scaling * sub_scaling);	
+				output += torque_ratio;
+				output = fmin(fmax(output, 0.0), 1.0);
 				ms_without_cadence = 0.0;
 				ms_without_cadence_cooling_time = 0.0;
 				min_start_torque_reached = false;
@@ -707,33 +709,35 @@ static THD_FUNCTION(pas_thread, arg)
 			// start on pedal press available (1s delay) for 3s, if no PAS signal are detected it cools down for 1 second.
 			else
 			{
-				if (torque_ratio > min_start_torque)
-				{
-					min_start_torque_reached = true;
-				}
-				if (min_start_torque_reached)
-				{
-					if (ms_without_cadence_cooling_time > MS_WITHOUT_CADENCE_COOLING_TIME)
-					{
-						ms_without_cadence += (1000.0 * (float)sleep_time) / (float)CH_CFG_ST_FREQUENCY;
-						if (ms_without_cadence < MAX_MS_WITHOUT_CADENCE)
-						{
-							output = config.current_scaling * torque_ratio * sub_scaling;
-							utils_truncate_number(&output, 0.0, config.current_scaling * sub_scaling);
-						}
-						else
-						{
-							output = 0.0;
-							ms_without_cadence_cooling_time = 0.0;
-							min_start_torque_reached = false;
-						}
-					}
-					else
-					{
-						output = 0.0;
-						ms_without_cadence_cooling_time += (1000.0 * (float)sleep_time) / (float)CH_CFG_ST_FREQUENCY;
-					}
-				}
+				// DISABLE THIS AS IT IS BROKEN RIGHT NOW
+				// if (torque_ratio > min_start_torque)
+				// {
+				// 	min_start_torque_reached = true;
+				// }
+				// if (min_start_torque_reached)
+				// {
+				// 	if (ms_without_cadence_cooling_time > MS_WITHOUT_CADENCE_COOLING_TIME)
+				// 	{
+				// 		ms_without_cadence += (1000.0 * (float)sleep_time) / (float)CH_CFG_ST_FREQUENCY;
+				// 		if (ms_without_cadence < MAX_MS_WITHOUT_CADENCE)
+				// 		{
+				// 			output = config.current_scaling * torque_ratio * sub_scaling;
+				// 			utils_truncate_number(&output, 0.0, config.current_scaling * sub_scaling);
+				// 		}
+				// 		else
+				// 		{
+				// 			output = 0.0;
+				// 			ms_without_cadence_cooling_time = 0.0;
+				// 			min_start_torque_reached = false;
+				// 		}
+				// 	}
+				// 	else
+				// 	{
+				// 		output = 0.0;
+				// 		ms_without_cadence_cooling_time += (1000.0 * (float)sleep_time) / (float)CH_CFG_ST_FREQUENCY;
+				// 	}
+				// }
+				output= 0.0;
 			}
 			break;
 
