@@ -466,7 +466,7 @@ void pas_event_handler(void)
 			downtime++;
 		}
 		sample_time = uptime + downtime;
-		if (sample_time > (config.magnets * 2))
+		if (sample_time > (config.magnets * 2) && uptime != 0 && pedal_rpm != 0 )
 		{
 			drift_percent_check= (uptime * 100) / sample_time;
 			drift_percent = ((((uptime * 100) / sample_time) - config.pas_hall_torque_offset) * -1) * config.pas_hall_torque_gain; // 5 is a calibration factor to get percentage and 36 is the offset
