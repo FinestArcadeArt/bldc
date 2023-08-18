@@ -169,6 +169,10 @@ typedef struct
 	lbm_uint pas_brake_delay;
 	lbm_uint pas_brake_voltage_trigger;
 	lbm_uint pas_brake_voltage_inverted;
+	lbm_uint pas_torque_linear_factor;
+	lbm_uint pas_pedal_linear_factor;
+	lbm_uint pas_pedal_torque_ratio;
+	
 
 	// Sysinfo
 	lbm_uint hw_name;
@@ -652,6 +656,18 @@ static bool compare_symbol(lbm_uint sym, lbm_uint *comp)
 		else if (comp == &syms_vesc.pas_brake_voltage_inverted)
 		{
 			get_add_symbol("pas-brake-voltage-inverted", comp);
+		}
+		else if (comp == &syms_vesc.pas_torque_linear_factor)
+		{
+			get_add_symbol("pas-torque-linear-factor", comp);
+		}
+		else if (comp == &syms_vesc.pas_pedal_linear_factor)
+		{
+			get_add_symbol("pas-pedal-linear-factor", comp);
+		}
+		else if (comp == &syms_vesc.pas_pedal_torque_ratio)
+		{
+			get_add_symbol("pas-pedal-torque-ratio", comp);
 		}
 		else if (comp == &syms_vesc.hw_name)
 		{
@@ -3944,6 +3960,21 @@ static lbm_value ext_conf_set(lbm_value *args, lbm_uint argn)
 			appconf->app_pas_conf.pas_brake_voltage_trigger = lbm_dec_as_float(args[1]);
 			changed_app = 2;
 		}
+		else if (compare_symbol(name, &syms_vesc.pas_torque_linear_factor))
+		{
+			appconf->app_pas_conf.pas_torque_linear_factor = lbm_dec_as_float(args[1]);
+			changed_app = 2;
+		}
+		else if (compare_symbol(name, &syms_vesc.pas_pedal_linear_factor))
+		{
+			appconf->app_pas_conf.pas_pedal_linear_factor = lbm_dec_as_float(args[1]);
+			changed_app = 2;
+		}
+		else if (compare_symbol(name, &syms_vesc.pas_pedal_torque_ratio))
+		{
+			appconf->app_pas_conf.pas_pedal_torque_ratio = lbm_dec_as_float(args[1]);
+			changed_app = 2;
+		}
 	}
 
 	if (changed_mc > 0)
@@ -4353,6 +4384,20 @@ static lbm_value ext_conf_get(lbm_value *args, lbm_uint argn)
 	{
 		res = lbm_enc_i(appconf->app_pas_conf.pas_brake_voltage_inverted);
 	}
+	else if (compare_symbol(name, &syms_vesc.pas_torque_linear_factor))
+	{
+		res = lbm_enc_i(appconf->app_pas_conf.pas_torque_linear_factor);
+	}
+	else if (compare_symbol(name, &syms_vesc.pas_pedal_linear_factor))
+	{
+		res = lbm_enc_i(appconf->app_pas_conf.pas_pedal_linear_factor);
+	}
+	else if (compare_symbol(name, &syms_vesc.pas_pedal_torque_ratio))
+	{
+		res = lbm_enc_i(appconf->app_pas_conf.pas_pedal_torque_ratio);
+	}
+
+
 
 	if (defaultcfg)
 	{

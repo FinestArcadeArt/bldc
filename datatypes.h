@@ -773,9 +773,11 @@ typedef struct
 	float pas_brake_voltage_trigger;
 	bool pas_brake_voltage_inverted;
 	float pas_pid_start_percent;
-	uint8_t pas_hall_torque_samples;
 	float pas_hall_torque_offset;
-	float pas_hall_torque_gain;
+	float pas_torque_gain;
+	float pas_torque_linear_factor;
+	float pas_pedal_linear_factor;
+	float pas_pedal_torque_ratio;
 } pas_config;
 
 // NRF Datatypes
