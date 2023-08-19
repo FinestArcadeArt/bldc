@@ -482,7 +482,7 @@ void pas_event_handler(void)
 		if (magnet_count > (config.magnets / 2) && uptime != 0 && pedal_rpm != 0)
 		{
 			drift_percent_check = (uptime * 100) / sample_time;
-			drift_percent = (((((uptime * 100) / sample_time) - config.pas_hall_torque_offset) * -1)* config.pas_torque_gain); // 5 is a calibration factor to get percentage and 36 is the offset
+			drift_percent = (((((uptime * 100) / sample_time) - config.pas_hall_torque_offset) * -1) * config.pas_torque_gain); // 5 is a calibration factor to get percentage and 36 is the offset
 			uptime = 0;
 			downtime = 0;
 			magnet_count = 0;
@@ -515,7 +515,12 @@ void pas_event_handler(void)
 	else
 	{
 		torque_percent = 0.0;
+		drift_percent = 0.0;
+		uptime = 0;
+		downtime = 0;
+		magnet_count = 0;
 	}
+	
 	new_state = PAS2_level * 2 + PAS1_level;
 	direction_qem = (float)QEM[old_state * 4 + new_state];
 	old_state = new_state;
@@ -658,14 +663,14 @@ static THD_FUNCTION(pas_thread, arg)
 			}
 			if (pedal_rpm > (config.pedal_rpm_start) && torque_started)
 			{
-				//get pedal cadence proportional value
+				// get pedal cadence proportional value
 				output = utils_map(pedal_rpm, config.pedal_rpm_start, config.pedal_rpm_end, 0.0, 1.0);
-				//apply pedal non linearity
-				output = (utils_throttle_curve(output, (pas_pedal_linear_factor)* -1, 0, 0));
+				// apply pedal non linearity
+				output = (utils_throttle_curve(output, (pas_pedal_linear_factor) * -1, 0, 0));
 				// Limit to torque/pedal ratio
 				utils_truncate_number(&output, 0.0, pas_pedal_torque_ratio);
 				// apply torque non linearity
-				torque_percent = (utils_throttle_curve((torque_percent / 100), (pas_torque_linear_factor)* -1, 0, 0)); // use exp curving to compensate bad TS and add a minimum 0.001 too
+				torque_percent = (utils_throttle_curve((torque_percent / 100), (pas_torque_linear_factor) * -1, 0, 0)); // use exp curving to compensate bad TS and add a minimum 0.001 too
 				// add torque value
 				output += torque_percent;
 				// ensure output stays under 1.0
