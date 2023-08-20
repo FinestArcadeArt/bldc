@@ -453,6 +453,7 @@ void pas_event_handler(void)
 	static float period_filtered = 0;
 	static uint8_t correct_direction_counter = 0;
 	static uint8_t correct_direction_counter_last = 100;
+	static uint16_t magnet_count = 0;
 
 	uint8_t PAS1_level = palReadPad(HW_PAS1_PORT, HW_PAS1_PIN);
 	uint8_t PAS2_level = palReadPad(HW_PAS2_PORT, HW_PAS2_PIN);
@@ -461,7 +462,7 @@ void pas_event_handler(void)
 	if (pedal_rpm != 0)
 	{
 		// If HALL TORQUE SENSOR
-		static uint16_t magnet_count = 0;
+		
 		static bool is_next_magnet = false;
 		if (PAS1_level == 1 && PAS2_level == 1)
 		{
