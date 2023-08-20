@@ -235,14 +235,14 @@ float app_pas_get_pedal_torque(void)
 
 float app_pas_get_kp(void)
 {
-	// return kp * error;
-	return drift_percent_check;
+	return kp * error;
+	// return drift_percent_check;
 }
 
 float app_pas_get_ki(void)
 {
-	// return ki * error_ki;
-	return drift_percent;
+	return ki * error_ki;
+	// return drift_percent;
 }
 
 float app_pas_get_kd(void)
@@ -458,70 +458,8 @@ void pas_event_handler(void)
 	uint8_t PAS1_level = palReadPad(HW_PAS1_PORT, HW_PAS1_PIN);
 	uint8_t PAS2_level = palReadPad(HW_PAS2_PORT, HW_PAS2_PIN);
 
-	// Hall sensor based torque sensor data aquisition
-	if (pedal_rpm != 0)
-	{
-		// If HALL TORQUE SENSOR
-		
-		static bool is_next_magnet = false;
-		if (PAS1_level == 1 && PAS2_level == 1)
-		{
-			uptime++;
-			if (is_next_magnet)
-				is_next_magnet = false;
-		}
-		else
-			downtime++;
-
-		if (PAS1_level == 0 && PAS2_level == 0 && !is_next_magnet)
-		{
-			magnet_count++;
-			if (!is_next_magnet)
-				is_next_magnet = true;
-		}
-		sample_time = uptime + downtime;
-		if (magnet_count > (config.magnets / 2) && uptime != 0 && pedal_rpm != 0)
-		{
-			drift_percent_check = (uptime * 100) / sample_time;
-			drift_percent = (((((uptime * 100) / sample_time) - config.pas_hall_torque_offset) * -1) * config.pas_torque_gain); // 5 is a calibration factor to get percentage and 36 is the offset
-			uptime = 0;
-			downtime = 0;
-			magnet_count = 0;
-		}
-
-		// safety guards
-		drift_percent = fmin(fmax(drift_percent, 0), 100);
-
-		// static uint16_t delay_to_print = 0;
-		// if (delay_to_print++ > 200)
-		// {
-		// 	delay_to_print = 0;
-		// 	commands_printf("uptime %.2f, downtime %.2f, sample_time %.2f, magnet_count %d, drift_percent %.2f \n", (double)uptime, (double)downtime, (double)sample_time, (int)magnet_count, (double)drift_percent);
-		// 	// commands_printf("pas_hall_torque_offset %.2f, pas_torque_gain %.2f, pas_hall_torque_samples %d \n", (double)pas_hall_torque_offset, (double)pas_torque_gain, (int)pas_hall_torque_samples);
-		// }
-
-		// reaching for smoother values
-
-		if (drift_percent > torque_percent)
-		{
-			torque_percent += (drift_percent - torque_percent) / 2;
-		}
-		else if (drift_percent < torque_percent)
-		{
-			torque_percent -= (torque_percent - drift_percent) / 2;
-		}
-		// safety guards
-		torque_percent = fmin(fmax(torque_percent, 0), 100);
-	}
-	else
-	{
-		torque_percent = 0.0;
-		drift_percent = 0.0;
-		uptime = 0;
-		downtime = 0;
-		magnet_count = 0;
-	}
 	
+	// quadrature signal detection
 	new_state = PAS2_level * 2 + PAS1_level;
 	direction_qem = (float)QEM[old_state * 4 + new_state];
 	old_state = new_state;
@@ -570,6 +508,72 @@ void pas_event_handler(void)
 		if (inactivity_time > 1.0 / ((((config.pedal_rpm_start / 2) + pedal_rpm) / 60.0) * config.magnets) * 2)
 		{
 			pedal_rpm = 0.0;
+		}
+	}
+
+	// Hall sensor based torque sensor data aquisition
+	if (config.ctrl_type == PAS_CTRL_TYPE_HALL_TORQUE)
+	{
+		// If HALL TORQUE SENSOR is used, we need to get ratio here.
+		if (pedal_rpm != 0)
+		{
+			static bool is_next_magnet = false;
+			if (PAS1_level == 1 && PAS2_level == 1)
+			{
+				uptime++;
+				if (is_next_magnet)
+					is_next_magnet = false;
+			}
+			else
+				downtime++;
+
+			if (PAS1_level == 0 && PAS2_level == 0 && !is_next_magnet)
+			{
+				magnet_count++;
+				if (!is_next_magnet)
+					is_next_magnet = true;
+			}
+			sample_time = uptime + downtime;
+			if (magnet_count > (config.magnets / 4) && uptime != 0 && pedal_rpm != 0)
+			{
+				drift_percent_check = (uptime * 100) / sample_time;
+				drift_percent = (((((uptime * 100) / sample_time) - config.pas_hall_torque_offset) * -1) * config.pas_torque_gain); // 5 is a calibration factor to get percentage and 36 is the offset
+				uptime = 0;
+				downtime = 0;
+				magnet_count = 0;
+			}
+
+			// safety guards
+			drift_percent = fmin(fmax(drift_percent, 0), 100);
+
+			// static uint16_t delay_to_print = 0;
+			// if (delay_to_print++ > 200)
+			// {
+			// 	delay_to_print = 0;
+			// 	commands_printf("uptime %.2f, downtime %.2f, sample_time %.2f, magnet_count %d, drift_percent %.2f \n", (double)uptime, (double)downtime, (double)sample_time, (int)magnet_count, (double)drift_percent);
+			// 	// commands_printf("pas_hall_torque_offset %.2f, pas_torque_gain %.2f, pas_hall_torque_samples %d \n", (double)pas_hall_torque_offset, (double)pas_torque_gain, (int)pas_hall_torque_samples);
+			// }
+
+			// reaching for smoother values
+
+			if (drift_percent > torque_percent)
+			{
+				torque_percent += (drift_percent - torque_percent) / 2;
+			}
+			else if (drift_percent < torque_percent)
+			{
+				torque_percent -= (torque_percent - drift_percent) / 2;
+			}
+			// safety guards
+			torque_percent = fmin(fmax(torque_percent, 0), 100);
+		}
+		else
+		{
+			torque_percent = 0.0;
+			drift_percent = 0.0;
+			uptime = 0;
+			downtime = 0;
+			magnet_count = 0;
 		}
 	}
 #endif
@@ -682,13 +686,14 @@ static THD_FUNCTION(pas_thread, arg)
 				output = 0.0;
 				torque_started = false;
 			}
-			static uint16_t delay_to_print = 0;
-			if (delay_to_print++ > 100)
-			{
-				delay_to_print = 0;
-				commands_printf("output %.2f, torque_percent %.2f \n", (double)output, (double)torque_percent);
-				// commands_printf("pas_hall_torque_offset %.2f, pas_torque_gain %.2f, pas_hall_torque_samples %d \n", (double)pas_hall_torque_offset, (double)pas_torque_gain, (int)pas_hall_torque_samples);
-			}
+			// PRINT DEBUG
+			// static uint16_t delay_to_print = 0;
+			// if (delay_to_print++ > 100)
+			// {
+			// 	delay_to_print = 0;
+			// 	commands_printf("output %.2f, torque_percent %.2f \n", (double)output, (double)torque_percent);
+			// 	// commands_printf("pas_hall_torque_offset %.2f, pas_torque_gain %.2f, pas_hall_torque_samples %d \n", (double)pas_hall_torque_offset, (double)pas_torque_gain, (int)pas_hall_torque_samples);
+			// }
 			break;
 
 		case PAS_CTRL_TYPE_CADENCE:
