@@ -67,7 +67,7 @@ static volatile bool pas_use_adc = true;
 static volatile bool pas_has_regen = false;
 
 // TORQUE SENSOR
-//static volatile float torque_ratio = 0.0;
+// static volatile float torque_ratio = 0.0;
 static volatile float min_start_torque = 0.5; // put this later in config
 static volatile bool torque_on_adc1 = false;
 static volatile bool adc_active = false;
@@ -111,9 +111,9 @@ static volatile float current_speed_goal = 0;
 static volatile float pas_pid_start_percent;
 
 // DEBUG
-static volatile float debug_1;
-static volatile float debug_2;
-static volatile float debug_3;
+// static volatile float debug_1;
+// static volatile float debug_2;
+// static volatile float debug_3;
 
 /**
  * Configure and initialize PAS application
@@ -236,20 +236,20 @@ float app_pas_get_pedal_torque(void)
 
 float app_pas_get_kp(void)
 {
-	//return kp * error;
-	return debug_1;
+	return kp * error;
+	// return debug_1;
 }
 
 float app_pas_get_ki(void)
 {
-	//return ki * error_ki;
-	return debug_2;
+	return ki * error_ki;
+	// return debug_2;
 }
 
 float app_pas_get_kd(void)
 {
-	//return kd * error_kd;
-	return debug_3;
+	return kd * error_kd;
+	// return debug_3;
 }
 
 float app_pas_get_adc_used(void)
@@ -460,7 +460,6 @@ void pas_event_handler(void)
 	uint8_t PAS1_level = palReadPad(HW_PAS1_PORT, HW_PAS1_PIN);
 	uint8_t PAS2_level = palReadPad(HW_PAS2_PORT, HW_PAS2_PIN);
 
-	
 	// quadrature signal detection
 	new_state = PAS2_level * 2 + PAS1_level;
 	direction_qem = (float)QEM[old_state * 4 + new_state];
@@ -672,16 +671,18 @@ static THD_FUNCTION(pas_thread, arg)
 				// get pedal cadence proportional value
 				output = utils_map(pedal_rpm, config.pedal_rpm_start, config.pedal_rpm_end, 0.0, 1.0);
 				// apply pedal non linearity
-				debug_1 = output;
+
 				output = (utils_throttle_curve(output, (pas_pedal_linear_factor) * -1, 0, 0));
-				debug_2 = output;
+
 				// Scale to torque/pedal ratio
 				output = utils_map(output, 0.0, 1.0, 0.0, pas_pedal_torque_ratio);
-				debug_3 = output;
+
 				// apply torque non linearity
-				torque_percent = (utils_throttle_curve((torque_percent / 100), (pas_torque_linear_factor) * -1, 0, 0)); // use exp curving to compensate bad TS and add a minimum 0.001 too
+				float torque1 = (utils_throttle_curve((torque_percent / 100), (pas_torque_linear_factor) * -1, 0, 0)); // use exp curving to compensate bad TS and add a minimum 0.001 too
+
 				// add torque value
-				output += torque_percent;
+				output += torque1;
+
 				// ensure output stays under 1.0
 				output = fmin(fmax(output, 0.0), 1.0);
 			}
