@@ -67,7 +67,7 @@ static volatile bool pas_use_adc = true;
 static volatile bool pas_has_regen = false;
 
 // TORQUE SENSOR
-static volatile float torque_ratio = 0.0;
+//static volatile float torque_ratio = 0.0;
 static volatile float min_start_torque = 0.5; // put this later in config
 static volatile bool torque_on_adc1 = false;
 static volatile bool adc_active = false;
@@ -111,8 +111,9 @@ static volatile float current_speed_goal = 0;
 static volatile float pas_pid_start_percent;
 
 // DEBUG
-static volatile float drift_percent_check;
-// static volatile uint16_t debug_2;
+static volatile float debug_1;
+static volatile float debug_2;
+static volatile float debug_3;
 
 /**
  * Configure and initialize PAS application
@@ -235,19 +236,20 @@ float app_pas_get_pedal_torque(void)
 
 float app_pas_get_kp(void)
 {
-	return kp * error;
-	// return drift_percent_check;
+	//return kp * error;
+	return debug_1;
 }
 
 float app_pas_get_ki(void)
 {
-	return ki * error_ki;
-	// return drift_percent;
+	//return ki * error_ki;
+	return debug_2;
 }
 
 float app_pas_get_kd(void)
 {
-	return kd * error_kd;
+	//return kd * error_kd;
+	return debug_3;
 }
 
 float app_pas_get_adc_used(void)
@@ -536,7 +538,6 @@ void pas_event_handler(void)
 			sample_time = uptime + downtime;
 			if (magnet_count > (config.magnets / 4) && uptime != 0 && pedal_rpm != 0)
 			{
-				drift_percent_check = (uptime * 100) / sample_time;
 				drift_percent = (((((uptime * 100) / sample_time) - config.pas_hall_torque_offset) * -1) * config.pas_torque_gain); // 5 is a calibration factor to get percentage and 36 is the offset
 				uptime = 0;
 				downtime = 0;
@@ -671,9 +672,12 @@ static THD_FUNCTION(pas_thread, arg)
 				// get pedal cadence proportional value
 				output = utils_map(pedal_rpm, config.pedal_rpm_start, config.pedal_rpm_end, 0.0, 1.0);
 				// apply pedal non linearity
+				debug_1 = output;
 				output = (utils_throttle_curve(output, (pas_pedal_linear_factor) * -1, 0, 0));
-				// Limit to torque/pedal ratio
-				utils_truncate_number(&output, 0.0, pas_pedal_torque_ratio);
+				debug_2 = output;
+				// Scale to torque/pedal ratio
+				output = utils_map(output, 0.0, 1.0, 0.0, pas_pedal_torque_ratio);
+				debug_3 = output;
 				// apply torque non linearity
 				torque_percent = (utils_throttle_curve((torque_percent / 100), (pas_torque_linear_factor) * -1, 0, 0)); // use exp curving to compensate bad TS and add a minimum 0.001 too
 				// add torque value
@@ -691,8 +695,8 @@ static THD_FUNCTION(pas_thread, arg)
 			// if (delay_to_print++ > 100)
 			// {
 			// 	delay_to_print = 0;
-			// 	commands_printf("output %.2f, torque_percent %.2f \n", (double)output, (double)torque_percent);
-			// 	// commands_printf("pas_hall_torque_offset %.2f, pas_torque_gain %.2f, pas_hall_torque_samples %d \n", (double)pas_hall_torque_offset, (double)pas_torque_gain, (int)pas_hall_torque_samples);
+			// 	commands_printf("output %.2f, config.current_scaling %.2f, sub_scaling %.2f, pas_torque_gain %.2f, pas_pedal_torque_ratio %.2f,pas_torque_linear_factor %.2f, pas_pedal_linear_factor %.2f \n", (double)output, (double)config.current_scaling, (double)sub_scaling, (double)pas_torque_gain, (double)pas_pedal_torque_ratio, (double)pas_torque_linear_factor, (double)pas_pedal_linear_factor);
+			// 	// commands_printf("pas_hall_torque_offset %.2f, pas_hall_torque_gain %.2f, pas_hall_torque_samples %d \n", (double)pas_hall_torque_offset, (double)pas_hall_torque_gain, (int)pas_hall_torque_samples);
 			// }
 			break;
 
@@ -736,7 +740,7 @@ static THD_FUNCTION(pas_thread, arg)
 				first_start_init = false;
 			}
 
-			torque_ratio = app_adc_get_decoded_level();
+			float torque_ratio = app_adc_get_decoded_level();
 
 			if (pedal_rpm > (config.pedal_rpm_start + 1.0))
 			{
