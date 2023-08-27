@@ -69,7 +69,7 @@ static volatile bool pas_has_regen = false;
 
 // TORQUE SENSOR
 // static volatile float torque_ratio = 0.0;
-static volatile float min_start_torque = 0.5; // put this later in config
+static volatile float min_start_torque = 5; // put this later in config
 static volatile bool torque_on_adc1 = false;
 static volatile bool adc_active = false;
 static volatile float adc_throttle;
@@ -679,7 +679,7 @@ static THD_FUNCTION(pas_thread, arg)
 				first_start_init = false;
 			}
 
-			if (torque_percent > 2 && !torque_started) // 20 is a good value
+			if (torque_percent > min_start_torque && !torque_started) // 20 is a good value
 			{
 				torque_started = true;
 			}
