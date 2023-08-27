@@ -61,6 +61,7 @@ static volatile float brake_input = 0.0;
 static volatile bool primary_output = false;
 static volatile bool stop_now = true;
 static volatile bool is_running = false;
+static volatile bool is_variable_width_sensor = false;
 
 // THROTTLE/BRAKE INTEGRATION
 static volatile bool pas_use_adc = true;
@@ -86,7 +87,7 @@ static float threshold_speed;
 static volatile uint16_t sample_time = 0;
 static volatile float drift_percent = 0;
 static volatile float torque_percent = 0;
-static volatile uint16_t uptime = 0;
+static volatile int16_t uptime = 0;
 static volatile uint16_t downtime = 0;
 static volatile uint16_t print_trigger = 0;
 static volatile uint16_t pas_data_trigger = 0;
@@ -133,6 +134,7 @@ void app_pas_configure(pas_config *conf)
 	// if pedal spins at x3 the end rpm, assume its beyond limits
 	min_pedal_period = 1.0 / ((config.pedal_rpm_end * 3.0 / 60.0));
 
+	// set direction
 	(config.invert_pedal_direction) ? (direction_conf = -1.0) : (direction_conf = 1.0);
 
 	// get PID settings
@@ -406,18 +408,29 @@ void pas_event_handler(void)
 		static float inactivity_time = 0;
 		static float period_filtered = 0;
 
+		static bool is_next_magnet = false;
+
 		uint8_t PAS_level = palReadPad(HW_PAS1_PORT, HW_PAS1_PIN);
-		// Maybe here Set the second port for external sensor
+
+		const float timestamp = (float)chVTGetSystemTimeX() / (float)CH_CFG_ST_FREQUENCY;
+
+		// create ratio for direction check
+		if (is_variable_width_sensor)
+		{
+			if (PAS_level == 1)
+				uptime++;
+			else
+				uptime--;
+		}
+
+		// count pulse here
 		new_state = PAS_level;
 		if (new_state != old_state)
 			pulse_count++;
 
 		old_state = new_state;
 
-		const float timestamp = (float)chVTGetSystemTimeX() / (float)CH_CFG_ST_FREQUENCY;
-
-		// sensors are poorly placed, so use only one rising edge as reference
-		if (pulse_count > 1)
+		if (pulse_count > 1) // count second edge
 		{
 			float period = (timestamp - old_timestamp) * (float)config.magnets;
 			old_timestamp = timestamp;
@@ -428,9 +441,12 @@ void pas_event_handler(void)
 			{ // can't be that short, abort
 				return;
 			}
-			pedal_rpm = 60.0 / period_filtered;
+			// add direction control for variable width sensors
+			if (uptime * direction_conf >= 0 || !is_variable_width_sensor)
+				pedal_rpm = 60.0 / period_filtered;
 			inactivity_time = 0.0;
 			pulse_count = 0;
+			uptime = 0;
 		}
 		else
 		{
@@ -440,6 +456,7 @@ void pas_event_handler(void)
 			if (inactivity_time > 1.0 / ((((config.pedal_rpm_start / 2) + pedal_rpm) / 60.0) * config.magnets) * 2)
 			{
 				pedal_rpm = 0.0;
+				uptime = 0;
 			}
 		}
 	}
@@ -467,7 +484,7 @@ void pas_event_handler(void)
 
 	const float timestamp = (float)chVTGetSystemTimeX() / (float)CH_CFG_ST_FREQUENCY;
 	// Require several quadrature events in the right direction to prevent vibrations from
-	// engging PAS
+	// engaging PAS
 	int8_t direction = (direction_conf * direction_qem);
 
 	switch (direction)
