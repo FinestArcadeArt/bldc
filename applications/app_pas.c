@@ -112,9 +112,9 @@ static volatile float current_speed_goal = 0;
 static volatile float pas_pid_start_percent;
 
 // DEBUG
-// static volatile float debug_1;
-// static volatile float debug_2;
-// static volatile float debug_3;
+static volatile float debug_1;
+static volatile float debug_2;
+static volatile float debug_3;
 
 /**
  * Configure and initialize PAS application
@@ -239,19 +239,19 @@ float app_pas_get_pedal_torque(void)
 float app_pas_get_kp(void)
 {
 	return kp * error;
-	// return debug_1;
+	//return debug_1;
 }
 
 float app_pas_get_ki(void)
 {
 	return ki * error_ki;
-	// return debug_2;
+	//return debug_2;
 }
 
 float app_pas_get_kd(void)
 {
 	return kd * error_kd;
-	// return debug_3;
+	//return debug_3;
 }
 
 float app_pas_get_adc_used(void)
@@ -542,18 +542,17 @@ void pas_event_handler(void)
 				if (is_next_magnet)
 					is_next_magnet = false;
 			}
+			else if (PAS1_level == 0 && PAS2_level == 0 && !is_next_magnet)
+			{
+				magnet_count++;
+				is_next_magnet = true;
+			}
 			else
 				downtime++;
 
-			if (PAS1_level == 0 && PAS2_level == 0 && !is_next_magnet)
+			if (magnet_count > (config.magnets / 4) && uptime != 0)
 			{
-				magnet_count++;
-				if (!is_next_magnet)
-					is_next_magnet = true;
-			}
-			sample_time = uptime + downtime;
-			if (magnet_count > (config.magnets / 4) && uptime != 0 && pedal_rpm != 0)
-			{
+				sample_time = uptime + downtime;
 				drift_percent = (((((uptime * 100) / sample_time) - config.pas_hall_torque_offset) * -1) * config.pas_torque_gain); // 5 is a calibration factor to get percentage and 36 is the offset
 				uptime = 0;
 				downtime = 0;
@@ -564,25 +563,24 @@ void pas_event_handler(void)
 			drift_percent = fmin(fmax(drift_percent, 0), 100);
 
 			// static uint16_t delay_to_print = 0;
-			// if (delay_to_print++ > 200)
+			// if (delay_to_print++ > 100)
 			// {
 			// 	delay_to_print = 0;
 			// 	commands_printf("uptime %.2f, downtime %.2f, sample_time %.2f, magnet_count %d, drift_percent %.2f \n", (double)uptime, (double)downtime, (double)sample_time, (int)magnet_count, (double)drift_percent);
 			// 	// commands_printf("pas_hall_torque_offset %.2f, pas_torque_gain %.2f, pas_hall_torque_samples %d \n", (double)pas_hall_torque_offset, (double)pas_torque_gain, (int)pas_hall_torque_samples);
 			// }
-
+			
+			//debug_2 = drift_percent;
+			
 			// reaching for smoother values
 
 			if (drift_percent > torque_percent)
-			{
-				torque_percent += (drift_percent - torque_percent) / 2;
-			}
+				torque_percent += (drift_percent - torque_percent) / 200; //need to make this a parameter "smoothing factor"
 			else if (drift_percent < torque_percent)
-			{
-				torque_percent -= (torque_percent - drift_percent) / 2;
-			}
+				torque_percent -= (torque_percent - drift_percent) / 200;
 			// safety guards
 			torque_percent = fmin(fmax(torque_percent, 0), 100);
+			//debug_3 = torque_percent;
 		}
 		else
 		{
@@ -696,7 +694,7 @@ static THD_FUNCTION(pas_thread, arg)
 
 				// apply torque non linearity
 				float torque1 = (utils_throttle_curve((torque_percent / 100), (pas_torque_linear_factor) * -1, 0, 0)); // use exp curving to compensate bad TS and add a minimum 0.001 too
-
+		
 				// add torque value
 				output += torque1;
 
