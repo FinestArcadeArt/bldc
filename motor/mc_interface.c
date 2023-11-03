@@ -1564,7 +1564,7 @@ float mc_interface_get_battery_level(float *wh_left) {
 	float ah_tot = conf->si_battery_ah;
 
 	switch (conf->si_battery_type) {
-	case BATTERY_TYPE_LIION_3_0__4_2:
+	case BATTERY_TYPE_LIION_3_0__4_2: // needs to be reworked imperatively.
 		battery_avg_voltage = ((3.2 + 4.2) / 2.0) * (float)(conf->si_battery_cells);
 		battery_avg_voltage_left = ((3.2 * (float)(conf->si_battery_cells) + v_in) / 2.0);
 		float batt_left = utils_map(v_in / (float)(conf->si_battery_cells),
