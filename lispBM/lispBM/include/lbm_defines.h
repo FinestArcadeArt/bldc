@@ -49,6 +49,8 @@
 
 #define LBM_VAL_MASK                     0xFFFFFFF0u
 #define LBM_VAL_TYPE_MASK                0x0000000Cu
+#define LBM_TYPE_MASK                    0xFC00000Cu
+#define LBM_NUMBER_MASK                  0x08000000u
                                                      //    gc ptr
 #define LBM_TYPE_SYMBOL                  0x00000000u // 00  0   0
 #define LBM_TYPE_CHAR                    0x00000004u // 01  0   0
@@ -60,6 +62,7 @@
 
 #define LBM_POINTER_TYPE_FIRST           (lbm_uint)0x1000000000000000
 #define LBM_TYPE_CONS                    (lbm_uint)0x1000000000000000
+#define LBM_TYPE_CONS_CONST              (lbm_uint)0x1400000000000000
 #define LBM_NON_CONS_POINTER_TYPE_FIRST  (lbm_uint)0x2000000000000000
 #define LBM_TYPE_U64                     (lbm_uint)0x2800000000000000
 #define LBM_TYPE_I64                     (lbm_uint)0x3800000000000000
@@ -79,6 +82,7 @@
 /* 8 - 2 free bits to encode type information into */
 #define LBM_VAL_MASK                    (lbm_uint)0xFFFFFFFFFFFFFF00
 #define LBM_VAL_TYPE_MASK               (lbm_uint)0xFC
+#define LBM_TYPE_MASK                   (lbm_uint)0xF8000000000000FC
 //    gc ptr
 #define LBM_TYPE_SYMBOL                 (lbm_uint)0x0 // 00 00 00  0   0
 #define LBM_TYPE_CHAR                   (lbm_uint)0x4 // 00 00 01  0   0
@@ -191,7 +195,8 @@
 #define SYM_PROGN_VAR           0x112
 #define SYM_SETQ                0x113
 #define SYM_MOVE_TO_FLASH       0x114
-#define SPECIAL_FORMS_END       0x114
+#define SYM_LOOP                0x115
+#define SPECIAL_FORMS_END       0x115
 
 // Apply funs:
 // Get their arguments in evaluated form.
@@ -215,7 +220,8 @@
 #define SYM_FLATTEN               0x15F
 #define SYM_UNFLATTEN             0x160
 #define SYM_KILL                  0x161
-#define APPLY_FUNS_END            0x161
+#define SYM_SLEEP                 0x162
+#define APPLY_FUNS_END            0x162
 
 #define FUNDAMENTALS_START 0x20E
 #define SYM_ADD           0x20E
@@ -395,6 +401,7 @@
 #define ENC_SYM_FLATTEN               ENC_SYM(SYM_FLATTEN)
 #define ENC_SYM_UNFLATTEN             ENC_SYM(SYM_UNFLATTEN)
 #define ENC_SYM_KILL                  ENC_SYM(SYM_KILL)
+#define ENC_SYM_SLEEP                 ENC_SYM(SYM_SLEEP)
 
 #define ENC_SYM_ADD           ENC_SYM(SYM_ADD)
 #define ENC_SYM_SUB           ENC_SYM(SYM_SUB)
