@@ -52,6 +52,11 @@
 #endif
 
 // Macros
+#define LED_GREEN_GPIO			GPIOB
+#define LED_GREEN_PIN			0 // 5 in doh38
+#define LED_RED_GPIO			GPIOB
+#define LED_RED_PIN				1 // 7 in doh38
+
 #ifdef HW60_VEDDER_FIRST_PCB
 #define ENABLE_GATE()			palSetPad(GPIOB, 6)
 #define DISABLE_GATE()			palClearPad(GPIOB, 6)
@@ -63,10 +68,10 @@
 #define DCCAL_OFF()
 #define IS_DRV_FAULT()			(!palReadPad(GPIOB, 7))
 
-#define LED_GREEN_ON()			palSetPad(GPIOB, 0)
-#define LED_GREEN_OFF()			palClearPad(GPIOB, 0)
-#define LED_RED_ON()			palSetPad(GPIOB, 1)
-#define LED_RED_OFF()			palClearPad(GPIOB, 1)
+#define LED_GREEN_ON()			palSetPad(LED_GREEN_GPIO, LED_GREEN_PIN)
+#define LED_GREEN_OFF()			palClearPad(LED_GREEN_GPIO, LED_GREEN_PIN)
+#define LED_RED_ON()			palSetPad(LED_RED_GPIO, LED_RED_PIN)
+#define LED_RED_OFF()			palClearPad(LED_RED_GPIO, LED_RED_PIN)
 
 #define CURRENT_FILTER_ON()		palSetPad(GPIOD, 2)
 #define CURRENT_FILTER_OFF()	palClearPad(GPIOD, 2)
@@ -119,6 +124,31 @@
 			CURRENT_FILTER_ON()
 #endif
 
+//CHOOSE PAS SENSOR (both commented out = disable PAS)
+//#define HW_HAS_3_WIRES_PAS_SENSOR
+#define HW_HAS_4_WIRES_PAS_SENSOR
+
+//HAS EXT SPEED SENSOR WITH 3 WIRE PAS
+#ifdef HW_HAS_3_WIRES_PAS_SENSOR
+#define HW_HAS_PAS_SENSOR
+#define HW_HAS_WHEEL_SPEED_SENSOR
+void hw_update_speed_sensor(void);
+float hw_get_speed(void);
+float hw_get_distance_abs(void);
+#endif
+
+//HAS EXT SPEED SENSOR WITH 4 WIRES PAS
+#ifdef HW_HAS_4_WIRES_PAS_SENSOR
+#define HW_HAS_PAS_SENSOR 
+// comment this block out if you don't use speed sensor with 4 wires PAS.
+// #define HW_HAS_WHEEL_SPEED_SENSOR
+// #define HW_SPEED_SENSOR_PORT			GPIOB
+// #define HW_SPEED_SENSOR_PIN				6
+// void hw_update_speed_sensor(void);
+// float hw_get_speed(void);
+// float hw_get_distance_abs(void);
+// block to be commented out end
+#endif
 /*
  * ADC Vector
  *
@@ -266,6 +296,7 @@
 #endif
 
 // ICU Peripheral for servo decoding
+#ifndef HW_HAS_4_WIRES_PAS_SENSOR
 #define HW_USE_SERVO_TIM4
 #define HW_ICU_TIMER			TIM4
 #define HW_ICU_TIM_CLK_EN()		RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM4, ENABLE)
@@ -274,6 +305,19 @@
 #define HW_ICU_GPIO_AF			GPIO_AF_TIM4
 #define HW_ICU_GPIO				GPIOB
 #define HW_ICU_PIN				6
+#endif
+// Case 4 WIRE PAS SENSOR,ICU Not used, routed to a dummy pin (not present in 64 pin
+// package) to free SERVO PORT FOR EXT SPEED
+// #ifdef HW_HAS_4_WIRES_PAS_SENSOR
+// #define HW_USE_SERVO_TIM4
+// #define HW_ICU_TIMER			TIM4
+// #define HW_ICU_TIM_CLK_EN()		RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM4, ENABLE)
+// #define HW_ICU_DEV				ICUD4
+// #define HW_ICU_CHANNEL			ICU_CHANNEL_1
+// #define HW_ICU_GPIO_AF			GPIO_AF_TIM4
+// #define HW_ICU_GPIO				GPIOD
+// #define HW_ICU_PIN				12
+// #endif
 
 // I2C Peripheral
 #define HW_I2C_DEV				I2CD2

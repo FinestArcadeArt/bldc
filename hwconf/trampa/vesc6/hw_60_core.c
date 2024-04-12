@@ -26,6 +26,13 @@
 #include "commands.h"
 #include "mc_interface.h"
 
+// #include "app.h"
+// #include "terminal.h"
+// #include "commands.h"
+// #include "stdio.h"
+// #include "app.h"
+// #include "mempools.h"
+
 // Variables
 static volatile bool i2c_running = false;
 #if defined(HW60_IS_MK3) || defined(HW60_IS_MK4) || defined(HW60_IS_MK5) || defined(HW60_IS_MK6)
@@ -57,10 +64,10 @@ void hw_init_gpio(void) {
 	RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOD, ENABLE);
 
 	// LEDs
-	palSetPadMode(GPIOB, 0,
+	palSetPadMode(LED_GREEN_GPIO, LED_GREEN_PIN,
 			PAL_MODE_OUTPUT_PUSHPULL |
 			PAL_STM32_OSPEED_HIGHEST);
-	palSetPadMode(GPIOB, 1,
+	palSetPadMode(LED_RED_GPIO, LED_RED_PIN,
 			PAL_MODE_OUTPUT_PUSHPULL |
 			PAL_STM32_OSPEED_HIGHEST);
 
@@ -305,6 +312,57 @@ void hw_try_restore_i2c(void) {
 
 		i2cReleaseBus(&HW_I2C_DEV);
 	}
+}
+
+#ifdef HW_HAS_WHEEL_SPEED_SENSOR
+//EXT SPEED FUNCTIONS
+static float wheel_rpm_filtered = 0;
+static float trip_odometer = 0;
+void hw_update_speed_sensor(void) {
+	static float wheel_rpm = 0;
+	static uint8_t sensor_state = 0;
+	static uint8_t sensor_state_old = 0;
+	static float last_sensor_event_time = 0;
+	float current_time = (float)chVTGetSystemTimeX() / (float)CH_CFG_ST_FREQUENCY;
+
+	sensor_state = palReadPad(HW_SPEED_SENSOR_PORT, HW_SPEED_SENSOR_PIN);
+
+	if(sensor_state == 0 && sensor_state_old == 1 ) {
+		float revolution_duration = current_time - last_sensor_event_time;
+
+		if (revolution_duration > 0.05) {	//ignore periods <50ms
+			last_sensor_event_time = current_time;
+			wheel_rpm = 60.0 / revolution_duration;
+			UTILS_LP_FAST(wheel_rpm_filtered, (float)wheel_rpm, 0.5);
+
+			
+			const volatile mc_configuration *conf = (const volatile mc_configuration *) mc_interface_get_configuration();
+			trip_odometer += conf->si_wheel_diameter * M_PI;
+			//trip_odometer += mc_interface_get_configuration()->si_wheel_diameter * M_PI; test this
+		}
+	} else {
+		// After 3 seconds without sensor signal, set RPM as zero
+		if ( (current_time - last_sensor_event_time) > 3.0) {
+			wheel_rpm_filtered = 0.0;
+		}
+	}
+	sensor_state_old = sensor_state;
+}
+
+/* Get speed in m/s */
+float hw_get_speed(void) {
+	const volatile mc_configuration *conf = (const volatile mc_configuration *) mc_interface_get_configuration();
+	float speed = wheel_rpm_filtered * conf->si_wheel_diameter * M_PI / 60.0;
+	return speed;
+}
+
+/* Get trip distance in meters */
+float hw_get_distance(void) {
+	return trip_odometer;
+}
+
+float hw_get_distance_abs(void) {
+	return trip_odometer;
 }
 
 #if defined(HW60_IS_MK3) || defined(HW60_IS_MK4) || defined(HW60_IS_MK5) || defined(HW60_IS_MK6)
